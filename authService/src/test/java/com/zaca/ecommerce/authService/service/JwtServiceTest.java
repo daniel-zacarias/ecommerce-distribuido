@@ -40,19 +40,6 @@ class JwtServiceTest {
 	}
 
 	@Test
-	void accessAndRefreshTokensHaveDifferentUniqueIds() {
-		JwtService.GeneratedToken accessToken = jwtService.generateAccessToken("user-id-1");
-		JwtService.GeneratedToken refreshToken = jwtService.generateRefreshToken("user-id-1");
-
-		Claims accessClaims = parseClaims(accessToken.token());
-		Claims refreshClaims = parseClaims(refreshToken.token());
-
-		assertThat(accessClaims.getId()).isNotEqualTo(refreshClaims.getId());
-		assertThat(refreshClaims.get("type", String.class)).isEqualTo("refresh");
-		assertThat(refreshToken.expiresAt()).isAfter(accessToken.expiresAt());
-	}
-
-	@Test
 	void validateReturnsClaimsForValidToken() {
 		JwtService.GeneratedToken token = jwtService.generateAccessToken("user-id-1");
 

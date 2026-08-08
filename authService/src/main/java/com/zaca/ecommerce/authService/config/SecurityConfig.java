@@ -21,6 +21,7 @@ public class SecurityConfig {
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers(HttpMethod.POST, "/auth").permitAll()
 						.requestMatchers(HttpMethod.POST, "/auth/validate").permitAll()
+						.requestMatchers(HttpMethod.POST, "/auth/refresh").permitAll()
 						.anyRequest().authenticated());
 
 		return http.build();

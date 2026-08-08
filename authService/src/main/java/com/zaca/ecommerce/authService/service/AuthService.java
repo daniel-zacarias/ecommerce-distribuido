@@ -1,23 +1,34 @@
 package com.zaca.ecommerce.authService.service;
 
 import com.zaca.ecommerce.authService.client.UserServiceClient;
+import com.zaca.ecommerce.authService.config.JwtProperties;
 import com.zaca.ecommerce.authService.dto.AuthResponse;
 import com.zaca.ecommerce.authService.dto.TokenValidationResponse;
 import com.zaca.ecommerce.authService.dto.UserValidationResponse;
 import com.zaca.ecommerce.authService.exception.InvalidCredentialsException;
 import com.zaca.ecommerce.authService.exception.InvalidTokenException;
+import com.zaca.ecommerce.authService.exception.RefreshTokenReusedException;
+import com.zaca.ecommerce.authService.repository.RefreshSessionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+
+import java.time.Duration;
+import java.util.UUID;
 
 @Service
 public class AuthService {
 
 	private final UserServiceClient userServiceClient;
 	private final JwtService jwtService;
+	private final RefreshSessionRepository refreshSessionRepository;
+	private final JwtProperties jwtProperties;
 
-	public AuthService(UserServiceClient userServiceClient, JwtService jwtService) {
+	public AuthService(UserServiceClient userServiceClient, JwtService jwtService,
+			RefreshSessionRepository refreshSessionRepository, JwtProperties jwtProperties) {
 		this.userServiceClient = userServiceClient;
 		this.jwtService = jwtService;
+		this.refreshSessionRepository = refreshSessionRepository;
+		this.jwtProperties = jwtProperties;
 	}
 
 	public AuthResponse authenticate(String username, String password) {
@@ -28,9 +39,32 @@ public class AuthService {
 		}
 
 		JwtService.GeneratedToken accessToken = jwtService.generateAccessToken(validationResponse.id());
-		JwtService.GeneratedToken refreshToken = jwtService.generateRefreshToken(validationResponse.id());
+		String refreshToken = UUID.randomUUID().toString();
+		refreshSessionRepository.create(refreshToken, validationResponse.id(), refreshTokenTtl());
 
-		return new AuthResponse(accessToken.token(), refreshToken.token(), accessToken.expiresAt());
+		return new AuthResponse(accessToken.token(), refreshToken, accessToken.expiresAt());
+	}
+
+	public AuthResponse refresh(String refreshToken) {
+		String newRefreshToken = UUID.randomUUID().toString();
+
+		RefreshSessionRepository.RotationOutcome outcome = refreshSessionRepository.rotate(refreshToken,
+				newRefreshToken, refreshTokenTtl());
+
+		switch (outcome.result()) {
+			case NOT_FOUND -> throw new InvalidTokenException("Refresh token is invalid or expired");
+			case REUSE_DETECTED ->
+				throw new RefreshTokenReusedException("Refresh token reuse detected; session revoked");
+			case ROTATED -> {
+			}
+		}
+
+		JwtService.GeneratedToken accessToken = jwtService.generateAccessToken(outcome.userId());
+		return new AuthResponse(accessToken.token(), newRefreshToken, accessToken.expiresAt());
+	}
+
+	private Duration refreshTokenTtl() {
+		return Duration.ofMinutes(jwtProperties.refreshTokenExpirationMinutes());
 	}
 
 	public TokenValidationResponse validateToken(String authorizationHeader) {

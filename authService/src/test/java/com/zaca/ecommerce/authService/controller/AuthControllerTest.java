@@ -5,6 +5,7 @@ import com.zaca.ecommerce.authService.dto.AuthResponse;
 import com.zaca.ecommerce.authService.dto.TokenValidationResponse;
 import com.zaca.ecommerce.authService.exception.InvalidCredentialsException;
 import com.zaca.ecommerce.authService.exception.InvalidTokenException;
+import com.zaca.ecommerce.authService.exception.RefreshTokenReusedException;
 import com.zaca.ecommerce.authService.exception.TokenExpiredException;
 import com.zaca.ecommerce.authService.exception.UserServiceUnavailableException;
 import com.zaca.ecommerce.authService.service.AuthService;
@@ -134,5 +135,61 @@ class AuthControllerTest {
 
 		mockMvc.perform(post("/auth/validate"))
 				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void returnsNewTokensWhenRefreshTokenIsValid() throws Exception {
+		Instant expiresAt = Instant.parse("2026-08-07T23:00:00Z");
+		when(authService.refresh(eq("valid-refresh-token")))
+				.thenReturn(new AuthResponse("new-access-token", "new-refresh-token", expiresAt));
+
+		mockMvc.perform(post("/auth/refresh")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"refresh_token\":\"valid-refresh-token\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.access_token").value("new-access-token"))
+				.andExpect(jsonPath("$.refresh_token").value("new-refresh-token"));
+	}
+
+	@Test
+	void returns401WhenRefreshTokenIsInvalidOrExpired() throws Exception {
+		when(authService.refresh(eq("bad-refresh-token")))
+				.thenThrow(new InvalidTokenException("Refresh token is invalid or expired"));
+
+		mockMvc.perform(post("/auth/refresh")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"refresh_token\":\"bad-refresh-token\"}"))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void returns401WhenRefreshTokenWasAlreadyUsed() throws Exception {
+		when(authService.refresh(eq("reused-refresh-token")))
+				.thenThrow(new RefreshTokenReusedException("Refresh token reuse detected; session revoked"));
+
+		mockMvc.perform(post("/auth/refresh")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"refresh_token\":\"reused-refresh-token\"}"))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void returns400AndSkipsAuthServiceWhenRefreshTokenIsBlank() throws Exception {
+		mockMvc.perform(post("/auth/refresh")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"refresh_token\":\"\"}"))
+				.andExpect(status().isBadRequest());
+
+		verify(authService, never()).refresh(any());
+	}
+
+	@Test
+	void returns400WhenRefreshBodyIsMalformedJson() throws Exception {
+		mockMvc.perform(post("/auth/refresh")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("not-json"))
+				.andExpect(status().isBadRequest());
+
+		verify(authService, never()).refresh(any());
 	}
 }

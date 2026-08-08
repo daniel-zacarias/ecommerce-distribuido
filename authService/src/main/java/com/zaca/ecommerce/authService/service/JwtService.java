@@ -33,10 +33,6 @@ public class JwtService {
 		return generateToken(subject, "access", jwtProperties.accessTokenExpirationMinutes());
 	}
 
-	public GeneratedToken generateRefreshToken(String subject) {
-		return generateToken(subject, "refresh", jwtProperties.refreshTokenExpirationMinutes());
-	}
-
 	private GeneratedToken generateToken(String subject, String tokenType, long expirationMinutes) {
 		Instant now = Instant.now();
 		Instant expiresAt = now.plus(expirationMinutes, ChronoUnit.MINUTES);

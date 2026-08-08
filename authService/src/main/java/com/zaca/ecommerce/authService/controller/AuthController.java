@@ -2,6 +2,7 @@ package com.zaca.ecommerce.authService.controller;
 
 import com.zaca.ecommerce.authService.dto.AuthResponse;
 import com.zaca.ecommerce.authService.dto.LoginRequest;
+import com.zaca.ecommerce.authService.dto.RefreshRequest;
 import com.zaca.ecommerce.authService.dto.TokenValidationResponse;
 import com.zaca.ecommerce.authService.service.AuthService;
 import jakarta.validation.Valid;
@@ -30,6 +31,12 @@ public class AuthController {
 	public ResponseEntity<TokenValidationResponse> validate(
 			@RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
 		TokenValidationResponse response = authService.validateToken(authorizationHeader);
+		return ResponseEntity.ok(response);
+	}
+
+	@PostMapping("/auth/refresh")
+	public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshRequest refreshRequest) {
+		AuthResponse response = authService.refresh(refreshRequest.refresh_token());
 		return ResponseEntity.ok(response);
 	}
 }
