@@ -14,7 +14,7 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
 	@Bean
-	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+	public SecurityFilterChain securityFilterChain(HttpSecurity http) {
 		http
 				.csrf(AbstractHttpConfigurer::disable)
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -22,6 +22,7 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/auth").permitAll()
 						.requestMatchers(HttpMethod.POST, "/auth/validate").permitAll()
 						.requestMatchers(HttpMethod.POST, "/auth/refresh").permitAll()
+						.requestMatchers(HttpMethod.POST, "/auth/logout").permitAll()
 						.anyRequest().authenticated());
 
 		return http.build();

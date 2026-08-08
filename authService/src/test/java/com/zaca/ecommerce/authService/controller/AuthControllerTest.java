@@ -192,4 +192,21 @@ class AuthControllerTest {
 
 		verify(authService, never()).refresh(any());
 	}
+
+	@Test
+	void returnsNoContentWhenLoggingOutWithAValidBearerHeader() throws Exception {
+		mockMvc.perform(post("/auth/logout")
+						.header("Authorization", "Bearer valid-token"))
+				.andExpect(status().isNoContent());
+
+		verify(authService).logout(eq("Bearer valid-token"));
+	}
+
+	@Test
+	void returnsNoContentWhenLoggingOutWithoutAnAuthorizationHeader() throws Exception {
+		mockMvc.perform(post("/auth/logout"))
+				.andExpect(status().isNoContent());
+
+		verify(authService).logout(isNull());
+	}
 }

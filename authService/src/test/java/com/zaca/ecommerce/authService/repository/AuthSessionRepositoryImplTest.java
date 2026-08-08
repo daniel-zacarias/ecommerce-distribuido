@@ -20,20 +20,19 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Mocked unit test for {@link RefreshSessionRepositoryImpl}: verifies the Java-side
+ * Mocked unit test for {@link AuthSessionRepositoryImpl}: verifies the Java-side
  * key building and result handling in isolation, without a real Redis. The atomic
  * CAS behavior of the Lua script itself is verified separately, against a real Redis,
- * in {@link RefreshSessionRepositoryImplIntegrationTest}.
+ * in {@link AuthSessionRepositoryImplIntegrationTest}.
  */
 @ExtendWith(MockitoExtension.class)
-class RefreshSessionRepositoryImplTest {
+class AuthSessionRepositoryImplTest {
 
 	private static final Duration TTL = Duration.ofMinutes(10);
 
@@ -46,21 +45,22 @@ class RefreshSessionRepositoryImplTest {
 	@Mock
 	private HashOperations<String, Object, Object> hashOperations;
 
-	private RefreshSessionRepositoryImpl repository;
+	private AuthSessionRepositoryImpl repository;
 
 	@BeforeEach
 	void setUp() {
 		when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 		lenient().doReturn(hashOperations).when(redisTemplate).opsForHash();
-		repository = new RefreshSessionRepositoryImpl(redisTemplate);
+		repository = new AuthSessionRepositoryImpl(redisTemplate);
 	}
 
 	@Test
 	void createStoresTheTokenMappingAndTheSessionUnderTheSameGeneratedSessionId() {
-		repository.create("token-1", "user-1", TTL);
+		String sessionId = repository.create("token-1", "user-1", TTL);
 
 		ArgumentCaptor<String> generatedSessionId = ArgumentCaptor.forClass(String.class);
 		verify(valueOperations).set(eq("refresh-token:token-1"), generatedSessionId.capture(), eq(TTL));
+		assertThat(sessionId).isEqualTo(generatedSessionId.getValue());
 
 		String expectedSessionKey = "refresh-session:" + generatedSessionId.getValue();
 		verify(hashOperations).putAll(eq(expectedSessionKey), eq(Map.of("currentToken", "token-1", "userId", "user-1")));
@@ -68,12 +68,62 @@ class RefreshSessionRepositoryImplTest {
 	}
 
 	@Test
+	void linkAccessTokenStoresTheJtiToSessionMapping() {
+		repository.linkAccessToken("jti-1", "session-abc", TTL);
+
+		verify(valueOperations).set("access-jti:jti-1", "session-abc", TTL);
+	}
+
+	@Test
+	void revokeByAccessJtiReturnsFalseWhenJtiIsNotLinked() {
+		when(valueOperations.get("access-jti:unknown-jti")).thenReturn(null);
+
+		boolean revoked = repository.revokeByAccessJti("unknown-jti");
+
+		assertThat(revoked).isFalse();
+		verify(hashOperations, never()).put(anyString(), any(), any());
+	}
+
+	@Test
+	void revokeByAccessJtiMarksTheLinkedSessionAsRevoked() {
+		when(valueOperations.get("access-jti:jti-1")).thenReturn("session-abc");
+
+		boolean revoked = repository.revokeByAccessJti("jti-1");
+
+		assertThat(revoked).isTrue();
+		verify(hashOperations).put("refresh-session:session-abc", "revoked", "1");
+	}
+
+	@Test
+	void isAccessTokenRevokedReturnsFalseWhenJtiIsNotLinked() {
+		when(valueOperations.get("access-jti:unknown-jti")).thenReturn(null);
+
+		assertThat(repository.isAccessTokenRevoked("unknown-jti")).isFalse();
+	}
+
+	@Test
+	void isAccessTokenRevokedReturnsFalseWhenLinkedSessionIsNotRevoked() {
+		when(valueOperations.get("access-jti:jti-1")).thenReturn("session-abc");
+		when(hashOperations.get("refresh-session:session-abc", "revoked")).thenReturn(null);
+
+		assertThat(repository.isAccessTokenRevoked("jti-1")).isFalse();
+	}
+
+	@Test
+	void isAccessTokenRevokedReturnsTrueWhenLinkedSessionIsRevoked() {
+		when(valueOperations.get("access-jti:jti-1")).thenReturn("session-abc");
+		when(hashOperations.get("refresh-session:session-abc", "revoked")).thenReturn("1");
+
+		assertThat(repository.isAccessTokenRevoked("jti-1")).isTrue();
+	}
+
+	@Test
 	void rotateReturnsNotFoundWithoutRunningTheScriptWhenTokenMappingIsMissing() {
 		when(valueOperations.get("refresh-token:unknown-token")).thenReturn(null);
 
-		RefreshSessionRepository.RotationOutcome outcome = repository.rotate("unknown-token", "new-token", TTL);
+		AuthSessionRepository.RotationOutcome outcome = repository.rotate("unknown-token", "new-token", TTL);
 
-		assertThat(outcome.result()).isEqualTo(RefreshSessionRepository.RotationResult.NOT_FOUND);
+		assertThat(outcome.result()).isEqualTo(AuthSessionRepository.RotationResult.NOT_FOUND);
 		assertThat(outcome.userId()).isNull();
 		verify(redisTemplate, never()).execute(any(RedisScript.class), anyList(), any(), any(), any());
 	}
@@ -84,9 +134,9 @@ class RefreshSessionRepositoryImplTest {
 		stubScriptResult("session-abc", "old-token", "new-token", "ROTATED");
 		when(hashOperations.get("refresh-session:session-abc", "userId")).thenReturn("user-1");
 
-		RefreshSessionRepository.RotationOutcome outcome = repository.rotate("old-token", "new-token", TTL);
+		AuthSessionRepository.RotationOutcome outcome = repository.rotate("old-token", "new-token", TTL);
 
-		assertThat(outcome.result()).isEqualTo(RefreshSessionRepository.RotationResult.ROTATED);
+		assertThat(outcome.result()).isEqualTo(AuthSessionRepository.RotationResult.ROTATED);
 		assertThat(outcome.userId()).isEqualTo("user-1");
 		verify(valueOperations).set("refresh-token:new-token", "session-abc", TTL);
 	}
@@ -96,9 +146,9 @@ class RefreshSessionRepositoryImplTest {
 		when(valueOperations.get("refresh-token:old-token")).thenReturn("session-abc");
 		stubScriptResult("session-abc", "old-token", "new-token", "REUSE_DETECTED");
 
-		RefreshSessionRepository.RotationOutcome outcome = repository.rotate("old-token", "new-token", TTL);
+		AuthSessionRepository.RotationOutcome outcome = repository.rotate("old-token", "new-token", TTL);
 
-		assertThat(outcome.result()).isEqualTo(RefreshSessionRepository.RotationResult.REUSE_DETECTED);
+		assertThat(outcome.result()).isEqualTo(AuthSessionRepository.RotationResult.REUSE_DETECTED);
 		assertThat(outcome.userId()).isNull();
 		verify(hashOperations, never()).get(anyString(), any());
 		verify(valueOperations, never()).set(eq("refresh-token:new-token"), anyString(), any(Duration.class));
@@ -109,9 +159,9 @@ class RefreshSessionRepositoryImplTest {
 		when(valueOperations.get("refresh-token:old-token")).thenReturn("session-abc");
 		stubScriptResult("session-abc", "old-token", "new-token", "NOT_FOUND");
 
-		RefreshSessionRepository.RotationOutcome outcome = repository.rotate("old-token", "new-token", TTL);
+		AuthSessionRepository.RotationOutcome outcome = repository.rotate("old-token", "new-token", TTL);
 
-		assertThat(outcome.result()).isEqualTo(RefreshSessionRepository.RotationResult.NOT_FOUND);
+		assertThat(outcome.result()).isEqualTo(AuthSessionRepository.RotationResult.NOT_FOUND);
 		assertThat(outcome.userId()).isNull();
 	}
 

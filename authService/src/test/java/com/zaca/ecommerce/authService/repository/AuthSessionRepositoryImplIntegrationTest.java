@@ -25,16 +25,16 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Exercises {@link RefreshSessionRepositoryImpl} against a real Redis instance
+ * Exercises {@link AuthSessionRepositoryImpl} against a real Redis instance
  * (via Testcontainers), since the atomic CAS rotation logic lives inside a Lua
  * script that a mocked {@code StringRedisTemplate} cannot meaningfully verify.
  * Skipped automatically when Docker isn't available.
  *
- * @see RefreshSessionRepositoryImplTest for the mocked, Docker-free unit test.
+ * @see AuthSessionRepositoryImplTest for the mocked, Docker-free unit test.
  */
 @Testcontainers
 @EnabledIfDockerAvailable
-class RefreshSessionRepositoryImplIntegrationTest {
+class AuthSessionRepositoryImplIntegrationTest {
 
 	private static final Duration TTL = Duration.ofMinutes(10);
 
@@ -43,7 +43,7 @@ class RefreshSessionRepositoryImplIntegrationTest {
 
 	private static LettuceConnectionFactory connectionFactory;
 
-	private RefreshSessionRepositoryImpl repository;
+	private AuthSessionRepositoryImpl repository;
 
 	@BeforeAll
 	static void startConnectionFactory() {
@@ -61,15 +61,15 @@ class RefreshSessionRepositoryImplIntegrationTest {
 	void setUp() {
 		StringRedisTemplate redisTemplate = new StringRedisTemplate(connectionFactory);
 		redisTemplate.afterPropertiesSet();
-		repository = new RefreshSessionRepositoryImpl(redisTemplate);
+		repository = new AuthSessionRepositoryImpl(redisTemplate);
 	}
 
 	@Test
 	void rotateReturnsNotFoundForATokenThatWasNeverCreated() {
-		RefreshSessionRepository.RotationOutcome outcome = repository.rotate(
+		AuthSessionRepository.RotationOutcome outcome = repository.rotate(
 				UUID.randomUUID().toString(), UUID.randomUUID().toString(), TTL);
 
-		assertThat(outcome.result()).isEqualTo(RefreshSessionRepository.RotationResult.NOT_FOUND);
+		assertThat(outcome.result()).isEqualTo(AuthSessionRepository.RotationResult.NOT_FOUND);
 		assertThat(outcome.userId()).isNull();
 	}
 
@@ -79,9 +79,9 @@ class RefreshSessionRepositoryImplIntegrationTest {
 		String newToken = UUID.randomUUID().toString();
 		repository.create(token, "user-1", TTL);
 
-		RefreshSessionRepository.RotationOutcome outcome = repository.rotate(token, newToken, TTL);
+		AuthSessionRepository.RotationOutcome outcome = repository.rotate(token, newToken, TTL);
 
-		assertThat(outcome.result()).isEqualTo(RefreshSessionRepository.RotationResult.ROTATED);
+		assertThat(outcome.result()).isEqualTo(AuthSessionRepository.RotationResult.ROTATED);
 		assertThat(outcome.userId()).isEqualTo("user-1");
 	}
 
@@ -93,9 +93,9 @@ class RefreshSessionRepositoryImplIntegrationTest {
 		repository.create(token, "user-1", TTL);
 		repository.rotate(token, rotatedToken, TTL);
 
-		RefreshSessionRepository.RotationOutcome outcome = repository.rotate(rotatedToken, nextToken, TTL);
+		AuthSessionRepository.RotationOutcome outcome = repository.rotate(rotatedToken, nextToken, TTL);
 
-		assertThat(outcome.result()).isEqualTo(RefreshSessionRepository.RotationResult.ROTATED);
+		assertThat(outcome.result()).isEqualTo(AuthSessionRepository.RotationResult.ROTATED);
 		assertThat(outcome.userId()).isEqualTo("user-1");
 	}
 
@@ -105,9 +105,9 @@ class RefreshSessionRepositoryImplIntegrationTest {
 		repository.create(token, "user-1", TTL);
 		repository.rotate(token, UUID.randomUUID().toString(), TTL);
 
-		RefreshSessionRepository.RotationOutcome replay = repository.rotate(token, UUID.randomUUID().toString(), TTL);
+		AuthSessionRepository.RotationOutcome replay = repository.rotate(token, UUID.randomUUID().toString(), TTL);
 
-		assertThat(replay.result()).isEqualTo(RefreshSessionRepository.RotationResult.REUSE_DETECTED);
+		assertThat(replay.result()).isEqualTo(AuthSessionRepository.RotationResult.REUSE_DETECTED);
 		assertThat(replay.userId()).isNull();
 	}
 
@@ -122,9 +122,34 @@ class RefreshSessionRepositoryImplIntegrationTest {
 		repository.rotate(token, UUID.randomUUID().toString(), TTL);
 
 		// the token that was legitimately current at the time of the attack is burned too
-		RefreshSessionRepository.RotationOutcome outcome = repository.rotate(rotatedToken, UUID.randomUUID().toString(), TTL);
+		AuthSessionRepository.RotationOutcome outcome = repository.rotate(rotatedToken, UUID.randomUUID().toString(), TTL);
 
-		assertThat(outcome.result()).isEqualTo(RefreshSessionRepository.RotationResult.REUSE_DETECTED);
+		assertThat(outcome.result()).isEqualTo(AuthSessionRepository.RotationResult.REUSE_DETECTED);
+	}
+
+	@Test
+	void revokingBySessionsLinkedAccessTokenAlsoRejectsItsRefreshToken() {
+		String token = UUID.randomUUID().toString();
+		String sessionId = repository.create(token, "user-1", TTL);
+		String jti = UUID.randomUUID().toString();
+		repository.linkAccessToken(jti, sessionId, TTL);
+
+		assertThat(repository.isAccessTokenRevoked(jti)).isFalse();
+
+		boolean revoked = repository.revokeByAccessJti(jti);
+
+		assertThat(revoked).isTrue();
+		assertThat(repository.isAccessTokenRevoked(jti)).isTrue();
+
+		AuthSessionRepository.RotationOutcome outcome = repository.rotate(token, UUID.randomUUID().toString(), TTL);
+		assertThat(outcome.result()).isEqualTo(AuthSessionRepository.RotationResult.REUSE_DETECTED);
+	}
+
+	@Test
+	void revokeByAccessJtiIsANoOpWhenTheJtiWasNeverLinked() {
+		boolean revoked = repository.revokeByAccessJti(UUID.randomUUID().toString());
+
+		assertThat(revoked).isFalse();
 	}
 
 	@Test
@@ -136,7 +161,7 @@ class RefreshSessionRepositoryImplIntegrationTest {
 		ExecutorService executor = Executors.newFixedThreadPool(attempts);
 		CountDownLatch ready = new CountDownLatch(attempts);
 		CountDownLatch go = new CountDownLatch(1);
-		List<Future<RefreshSessionRepository.RotationOutcome>> futures = new ArrayList<>();
+		List<Future<AuthSessionRepository.RotationOutcome>> futures = new ArrayList<>();
 
 		try {
 			for (int i = 0; i < attempts; i++) {
@@ -152,7 +177,7 @@ class RefreshSessionRepositoryImplIntegrationTest {
 
 			AtomicLong rotated = new AtomicLong();
 			AtomicLong reuseDetected = new AtomicLong();
-			for (Future<RefreshSessionRepository.RotationOutcome> future : futures) {
+			for (Future<AuthSessionRepository.RotationOutcome> future : futures) {
 				switch (future.get().result()) {
 					case ROTATED -> rotated.incrementAndGet();
 					case REUSE_DETECTED -> reuseDetected.incrementAndGet();

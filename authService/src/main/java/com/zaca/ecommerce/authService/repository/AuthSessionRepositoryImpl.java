@@ -11,10 +11,11 @@ import java.util.Map;
 import java.util.UUID;
 
 @Component
-public class RefreshSessionRepositoryImpl implements RefreshSessionRepository {
+public class AuthSessionRepositoryImpl implements AuthSessionRepository {
 
 	private static final String TOKEN_KEY_PREFIX = "refresh-token:";
 	private static final String SESSION_KEY_PREFIX = "refresh-session:";
+	private static final String ACCESS_JTI_KEY_PREFIX = "access-jti:";
 
 	private static final RedisScript<String> ROTATE_SCRIPT = new DefaultRedisScript<>("""
 			if redis.call('EXISTS', KEYS[1]) == 0 then
@@ -35,18 +36,20 @@ public class RefreshSessionRepositoryImpl implements RefreshSessionRepository {
 
 	private final StringRedisTemplate redisTemplate;
 
-	public RefreshSessionRepositoryImpl(StringRedisTemplate redisTemplate) {
+	public AuthSessionRepositoryImpl(StringRedisTemplate redisTemplate) {
 		this.redisTemplate = redisTemplate;
 	}
 
 	@Override
-	public void create(String token, String userId, Duration ttl) {
+	public String create(String token, String userId, Duration ttl) {
 		String sessionId = UUID.randomUUID().toString();
 		String sessionKey = sessionKey(sessionId);
 
 		redisTemplate.opsForValue().set(tokenKey(token), sessionId, ttl);
 		redisTemplate.opsForHash().putAll(sessionKey, Map.of("currentToken", token, "userId", userId));
 		redisTemplate.expire(sessionKey, ttl);
+
+		return sessionId;
 	}
 
 	@Override
@@ -66,9 +69,35 @@ public class RefreshSessionRepositoryImpl implements RefreshSessionRepository {
 			case ROTATED -> {
 				String userId = (String) redisTemplate.opsForHash().get(sessionKey, "userId");
 				redisTemplate.opsForValue().set(tokenKey(newToken), sessionId, ttl);
-				yield RotationOutcome.rotated(userId);
+				yield RotationOutcome.rotated(userId, sessionId);
 			}
 		};
+	}
+
+	@Override
+	public void linkAccessToken(String jti, String sessionId, Duration ttl) {
+		redisTemplate.opsForValue().set(accessJtiKey(jti), sessionId, ttl);
+	}
+
+	@Override
+	public boolean revokeByAccessJti(String jti) {
+		String sessionId = redisTemplate.opsForValue().get(accessJtiKey(jti));
+		if (sessionId == null) {
+			return false;
+		}
+
+		redisTemplate.opsForHash().put(sessionKey(sessionId), "revoked", "1");
+		return true;
+	}
+
+	@Override
+	public boolean isAccessTokenRevoked(String jti) {
+		String sessionId = redisTemplate.opsForValue().get(accessJtiKey(jti));
+		if (sessionId == null) {
+			return false;
+		}
+
+		return "1".equals(redisTemplate.opsForHash().get(sessionKey(sessionId), "revoked"));
 	}
 
 	private String tokenKey(String token) {
@@ -77,5 +106,9 @@ public class RefreshSessionRepositoryImpl implements RefreshSessionRepository {
 
 	private String sessionKey(String sessionId) {
 		return SESSION_KEY_PREFIX + sessionId;
+	}
+
+	private String accessJtiKey(String jti) {
+		return ACCESS_JTI_KEY_PREFIX + jti;
 	}
 }

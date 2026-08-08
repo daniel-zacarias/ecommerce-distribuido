@@ -33,6 +33,7 @@ class JwtServiceTest {
 
 		assertThat(claims.getSubject()).isEqualTo("user-id-1");
 		assertThat(claims.getId()).isNotBlank();
+		assertThat(claims.getId()).isEqualTo(token.jti());
 		assertThat(claims.get("type", String.class)).isEqualTo("access");
 		assertThat(claims.getExpiration().toInstant()).isEqualTo(token.expiresAt().truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
 		assertThat(token.expiresAt()).isAfter(Instant.now().plusSeconds(1700));
@@ -47,6 +48,7 @@ class JwtServiceTest {
 
 		assertThat(claims.subject()).isEqualTo("user-id-1");
 		assertThat(claims.tokenType()).isEqualTo("access");
+		assertThat(claims.jti()).isEqualTo(token.jti());
 		assertThat(claims.expiresAt()).isEqualTo(token.expiresAt().truncatedTo(ChronoUnit.SECONDS));
 	}
 
