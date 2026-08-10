@@ -1,6 +1,7 @@
 package com.zaca.ecommerce.authService.service;
 
 import com.zaca.ecommerce.authService.config.JwtProperties;
+import com.zaca.ecommerce.authService.dto.Role;
 import com.zaca.ecommerce.authService.exception.InvalidTokenException;
 import com.zaca.ecommerce.authService.exception.TokenExpiredException;
 import io.jsonwebtoken.Claims;
@@ -29,11 +30,11 @@ public class JwtService {
 		this.signingKey = Keys.hmacShaKeyFor(jwtProperties.secret().getBytes(StandardCharsets.UTF_8));
 	}
 
-	public GeneratedToken generateAccessToken(String subject) {
-		return generateToken(subject, jwtProperties.accessTokenExpirationMinutes());
+	public GeneratedToken generateAccessToken(String subject, Role role) {
+		return generateToken(subject, role, jwtProperties.accessTokenExpirationMinutes());
 	}
 
-	private GeneratedToken generateToken(String subject, long expirationMinutes) {
+	private GeneratedToken generateToken(String subject, Role role, long expirationMinutes) {
 		Instant now = Instant.now();
 		Instant expiresAt = now.plus(expirationMinutes, ChronoUnit.MINUTES);
 
@@ -43,6 +44,7 @@ public class JwtService {
 				.subject(subject)
 				.id(jti)
 				.claim("type", tokenType)
+				.claim("role", role.name())
 				.issuedAt(Date.from(now))
 				.expiration(Date.from(expiresAt))
 				.signWith(signingKey)
@@ -64,7 +66,7 @@ public class JwtService {
 					.getPayload();
 
 			return new TokenClaims(claims.getSubject(), claims.get("type", String.class), claims.getId(),
-					claims.getExpiration().toInstant());
+					claims.getExpiration().toInstant(), Role.valueOf(claims.get("role", String.class)));
 		} catch (ExpiredJwtException ex) {
 			throw new TokenExpiredException("Token has expired");
 		} catch (JwtException | IllegalArgumentException ex) {
@@ -75,6 +77,6 @@ public class JwtService {
 	public record GeneratedToken(String token, String jti, Instant expiresAt) {
 	}
 
-	public record TokenClaims(String subject, String tokenType, String jti, Instant expiresAt) {
+	public record TokenClaims(String subject, String tokenType, String jti, Instant expiresAt, Role role) {
 	}
 }

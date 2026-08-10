@@ -1,9 +1,12 @@
 package com.zaca.ecommerce.userService.dto;
 
+import com.zaca.ecommerce.userService.entity.Role;
+
 import java.time.Instant;
 
 public record TokenValidationResponse(
 		String user_id,
 		String token_type,
-		Instant expires_at) {
+		Instant expires_at,
+		Role role) {
 }

@@ -2,6 +2,7 @@ package com.zaca.ecommerce.userService.controller;
 
 import com.zaca.ecommerce.userService.dto.UserResponse;
 import com.zaca.ecommerce.userService.dto.UserVerificationResponse;
+import com.zaca.ecommerce.userService.entity.Role;
 import com.zaca.ecommerce.userService.exception.DuplicateEmailException;
 import com.zaca.ecommerce.userService.exception.InvalidTokenException;
 import com.zaca.ecommerce.userService.exception.NoUpdatableFieldsException;
@@ -181,7 +182,7 @@ class UserControllerTest {
 	void returns200WithExistsTrueValidTrueWhenCredentialsMatch() throws Exception {
 		UUID userId = UUID.randomUUID();
 		when(userService.verifyCredentials(anyString(), anyString()))
-				.thenReturn(new UserVerificationResponse(true, true, userId));
+				.thenReturn(new UserVerificationResponse(true, true, userId, Role.USER));
 
 		mockMvc.perform(post("/internal/users/verify")
 						.contentType(MediaType.APPLICATION_JSON)
@@ -197,7 +198,7 @@ class UserControllerTest {
 	@Test
 	void returns200WithExistsFalseValidFalseWhenCredentialsDoNotMatch() throws Exception {
 		when(userService.verifyCredentials(anyString(), anyString()))
-				.thenReturn(new UserVerificationResponse(false, false, null));
+				.thenReturn(new UserVerificationResponse(false, false, null, null));
 
 		mockMvc.perform(post("/internal/users/verify")
 						.contentType(MediaType.APPLICATION_JSON)

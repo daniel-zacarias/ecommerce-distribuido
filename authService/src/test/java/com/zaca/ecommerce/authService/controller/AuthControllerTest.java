@@ -2,6 +2,7 @@ package com.zaca.ecommerce.authService.controller;
 
 import com.zaca.ecommerce.authService.config.SecurityConfig;
 import com.zaca.ecommerce.authService.dto.AuthResponse;
+import com.zaca.ecommerce.authService.dto.Role;
 import com.zaca.ecommerce.authService.dto.TokenValidationResponse;
 import com.zaca.ecommerce.authService.exception.InvalidCredentialsException;
 import com.zaca.ecommerce.authService.exception.InvalidTokenException;
@@ -99,7 +100,7 @@ class AuthControllerTest {
 	void returnsClaimsWhenTokenIsValid() throws Exception {
 		Instant expiresAt = Instant.parse("2026-08-07T23:00:00Z");
 		when(authService.validateToken(eq("Bearer valid-token")))
-				.thenReturn(new TokenValidationResponse("user-id-1", "access", expiresAt));
+				.thenReturn(new TokenValidationResponse("user-id-1", "access", expiresAt, Role.USER));
 
 		mockMvc.perform(post("/auth/validate")
 						.header("Authorization", "Bearer valid-token"))

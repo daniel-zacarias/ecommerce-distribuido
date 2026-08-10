@@ -1,5 +1,6 @@
 package com.zaca.ecommerce.userService.repository;
 
+import com.zaca.ecommerce.userService.entity.Role;
 import com.zaca.ecommerce.userService.entity.User;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +42,7 @@ class UserRepositoryIntegrationTest {
 				.name("User")
 				.email("user@test.com")
 				.password("hashed-password")
+				.role(Role.USER)
 				.createdAt(now)
 				.updatedAt(now)
 				.build();
@@ -58,6 +60,7 @@ class UserRepositoryIntegrationTest {
 				.name("Owner")
 				.email("owner@test.com")
 				.password("hashed-password")
+				.role(Role.USER)
 				.createdAt(now)
 				.updatedAt(now)
 				.build();
@@ -66,6 +69,7 @@ class UserRepositoryIntegrationTest {
 				.name("Other")
 				.email("other@test.com")
 				.password("hashed-password")
+				.role(Role.USER)
 				.createdAt(now)
 				.updatedAt(now)
 				.build();
@@ -83,6 +87,7 @@ class UserRepositoryIntegrationTest {
 				.name("Owner")
 				.email("owner@test.com")
 				.password("hashed-password")
+				.role(Role.USER)
 				.createdAt(now)
 				.updatedAt(now)
 				.build();
@@ -99,6 +104,7 @@ class UserRepositoryIntegrationTest {
 				.name("User")
 				.email("user2@test.com")
 				.password("hashed-password")
+				.role(Role.USER)
 				.createdAt(now)
 				.updatedAt(now)
 				.build();

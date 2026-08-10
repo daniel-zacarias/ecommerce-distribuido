@@ -1,5 +1,6 @@
 package com.zaca.ecommerce.authService.repository;
 
+import com.zaca.ecommerce.authService.dto.Role;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -41,12 +42,13 @@ public class AuthSessionRepositoryImpl implements AuthSessionRepository {
 	}
 
 	@Override
-	public String create(String token, String userId, Duration ttl) {
+	public String create(String token, String userId, Role role, Duration ttl) {
 		String sessionId = UUID.randomUUID().toString();
 		String sessionKey = sessionKey(sessionId);
 
 		redisTemplate.opsForValue().set(tokenKey(token), sessionId, ttl);
-		redisTemplate.opsForHash().putAll(sessionKey, Map.of("currentToken", token, "userId", userId));
+		redisTemplate.opsForHash().putAll(sessionKey,
+				Map.of("currentToken", token, "userId", userId, "role", role.name()));
 		redisTemplate.expire(sessionKey, ttl);
 
 		return sessionId;
@@ -68,8 +70,9 @@ public class AuthSessionRepositoryImpl implements AuthSessionRepository {
 			case REUSE_DETECTED -> RotationOutcome.reuseDetected();
 			case ROTATED -> {
 				String userId = (String) redisTemplate.opsForHash().get(sessionKey, "userId");
+				Role role = Role.valueOf((String) redisTemplate.opsForHash().get(sessionKey, "role"));
 				redisTemplate.opsForValue().set(tokenKey(newToken), sessionId, ttl);
-				yield RotationOutcome.rotated(userId, sessionId);
+				yield RotationOutcome.rotated(userId, role, sessionId);
 			}
 		};
 	}

@@ -1,5 +1,6 @@
 package com.zaca.ecommerce.authService.repository;
 
+import com.zaca.ecommerce.authService.dto.Role;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,14 +57,15 @@ class AuthSessionRepositoryImplTest {
 
 	@Test
 	void createStoresTheTokenMappingAndTheSessionUnderTheSameGeneratedSessionId() {
-		String sessionId = repository.create("token-1", "user-1", TTL);
+		String sessionId = repository.create("token-1", "user-1", Role.USER, TTL);
 
 		ArgumentCaptor<String> generatedSessionId = ArgumentCaptor.forClass(String.class);
 		verify(valueOperations).set(eq("refresh-token:token-1"), generatedSessionId.capture(), eq(TTL));
 		assertThat(sessionId).isEqualTo(generatedSessionId.getValue());
 
 		String expectedSessionKey = "refresh-session:" + generatedSessionId.getValue();
-		verify(hashOperations).putAll(eq(expectedSessionKey), eq(Map.of("currentToken", "token-1", "userId", "user-1")));
+		verify(hashOperations).putAll(eq(expectedSessionKey),
+				eq(Map.of("currentToken", "token-1", "userId", "user-1", "role", "USER")));
 		verify(redisTemplate).expire(expectedSessionKey, TTL);
 	}
 
@@ -133,11 +135,13 @@ class AuthSessionRepositoryImplTest {
 		when(valueOperations.get("refresh-token:old-token")).thenReturn("session-abc");
 		stubScriptResult("session-abc", "old-token", "new-token", "ROTATED");
 		when(hashOperations.get("refresh-session:session-abc", "userId")).thenReturn("user-1");
+		when(hashOperations.get("refresh-session:session-abc", "role")).thenReturn("ADMIN");
 
 		AuthSessionRepository.RotationOutcome outcome = repository.rotate("old-token", "new-token", TTL);
 
 		assertThat(outcome.result()).isEqualTo(AuthSessionRepository.RotationResult.ROTATED);
 		assertThat(outcome.userId()).isEqualTo("user-1");
+		assertThat(outcome.role()).isEqualTo(Role.ADMIN);
 		verify(valueOperations).set("refresh-token:new-token", "session-abc", TTL);
 	}
 

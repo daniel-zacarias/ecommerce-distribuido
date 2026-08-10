@@ -1,6 +1,7 @@
 package com.zaca.ecommerce.authService.repository;
 
 import com.redis.testcontainers.RedisContainer;
+import com.zaca.ecommerce.authService.dto.Role;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -77,7 +78,7 @@ class AuthSessionRepositoryImplIntegrationTest {
 	void rotateSucceedsForAFreshlyCreatedToken() {
 		String token = UUID.randomUUID().toString();
 		String newToken = UUID.randomUUID().toString();
-		repository.create(token, "user-1", TTL);
+		repository.create(token, "user-1", Role.USER, TTL);
 
 		AuthSessionRepository.RotationOutcome outcome = repository.rotate(token, newToken, TTL);
 
@@ -90,7 +91,7 @@ class AuthSessionRepositoryImplIntegrationTest {
 		String token = UUID.randomUUID().toString();
 		String rotatedToken = UUID.randomUUID().toString();
 		String nextToken = UUID.randomUUID().toString();
-		repository.create(token, "user-1", TTL);
+		repository.create(token, "user-1", Role.USER, TTL);
 		repository.rotate(token, rotatedToken, TTL);
 
 		AuthSessionRepository.RotationOutcome outcome = repository.rotate(rotatedToken, nextToken, TTL);
@@ -102,7 +103,7 @@ class AuthSessionRepositoryImplIntegrationTest {
 	@Test
 	void reusingAnAlreadyRotatedTokenIsDetected() {
 		String token = UUID.randomUUID().toString();
-		repository.create(token, "user-1", TTL);
+		repository.create(token, "user-1", Role.USER, TTL);
 		repository.rotate(token, UUID.randomUUID().toString(), TTL);
 
 		AuthSessionRepository.RotationOutcome replay = repository.rotate(token, UUID.randomUUID().toString(), TTL);
@@ -115,7 +116,7 @@ class AuthSessionRepositoryImplIntegrationTest {
 	void reuseDetectionRevokesTheWholeSessionIncludingTheNewestToken() {
 		String token = UUID.randomUUID().toString();
 		String rotatedToken = UUID.randomUUID().toString();
-		repository.create(token, "user-1", TTL);
+		repository.create(token, "user-1", Role.USER, TTL);
 		repository.rotate(token, rotatedToken, TTL);
 
 		// replay the already-used original token -> reuse detected, whole session revoked
@@ -130,7 +131,7 @@ class AuthSessionRepositoryImplIntegrationTest {
 	@Test
 	void revokingBySessionsLinkedAccessTokenAlsoRejectsItsRefreshToken() {
 		String token = UUID.randomUUID().toString();
-		String sessionId = repository.create(token, "user-1", TTL);
+		String sessionId = repository.create(token, "user-1", Role.USER, TTL);
 		String jti = UUID.randomUUID().toString();
 		repository.linkAccessToken(jti, sessionId, TTL);
 
@@ -155,7 +156,7 @@ class AuthSessionRepositoryImplIntegrationTest {
 	@Test
 	void concurrentRotationOfTheSameTokenSucceedsExactlyOnce() throws Exception {
 		String token = UUID.randomUUID().toString();
-		repository.create(token, "user-1", TTL);
+		repository.create(token, "user-1", Role.USER, TTL);
 
 		int attempts = 12;
 		ExecutorService executor = Executors.newFixedThreadPool(attempts);

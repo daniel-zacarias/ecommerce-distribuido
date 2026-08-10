@@ -39,9 +39,11 @@ public class AuthService {
 			throw new InvalidCredentialsException("Invalid credentials");
 		}
 
-		JwtService.GeneratedToken accessToken = jwtService.generateAccessToken(validationResponse.user_id());
+		JwtService.GeneratedToken accessToken = jwtService.generateAccessToken(validationResponse.user_id(),
+				validationResponse.role());
 		String refreshToken = UUID.randomUUID().toString();
-		String sessionId = authSessionRepository.create(refreshToken, validationResponse.user_id(), refreshTokenTtl());
+		String sessionId = authSessionRepository.create(refreshToken, validationResponse.user_id(),
+				validationResponse.role(), refreshTokenTtl());
 		authSessionRepository.linkAccessToken(accessToken.jti(), sessionId, accessTokenTtl());
 
 		return new AuthResponse(accessToken.token(), refreshToken, accessToken.expiresAt());
@@ -61,7 +63,7 @@ public class AuthService {
 			}
 		}
 
-		JwtService.GeneratedToken accessToken = jwtService.generateAccessToken(outcome.userId());
+		JwtService.GeneratedToken accessToken = jwtService.generateAccessToken(outcome.userId(), outcome.role());
 		authSessionRepository.linkAccessToken(accessToken.jti(), outcome.sessionId(), accessTokenTtl());
 		return new AuthResponse(accessToken.token(), newRefreshToken, accessToken.expiresAt());
 	}
@@ -85,7 +87,7 @@ public class AuthService {
 			throw new InvalidTokenException("Token has been revoked");
 		}
 
-		return new TokenValidationResponse(claims.subject(), claims.tokenType(), claims.expiresAt());
+		return new TokenValidationResponse(claims.subject(), claims.tokenType(), claims.expiresAt(), claims.role());
 	}
 
 	public void logout(String authorizationHeader) {

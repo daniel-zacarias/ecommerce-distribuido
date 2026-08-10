@@ -3,6 +3,7 @@ package com.zaca.ecommerce.authService.service;
 import com.zaca.ecommerce.authService.client.UserServiceClient;
 import com.zaca.ecommerce.authService.config.JwtProperties;
 import com.zaca.ecommerce.authService.dto.AuthResponse;
+import com.zaca.ecommerce.authService.dto.Role;
 import com.zaca.ecommerce.authService.dto.TokenValidationResponse;
 import com.zaca.ecommerce.authService.dto.UserValidationResponse;
 import com.zaca.ecommerce.authService.exception.InvalidCredentialsException;
@@ -51,12 +52,12 @@ class AuthServiceTest {
 	@Test
 	void returnsTokensWhenCredentialsAreValid() {
 		when(userServiceClient.validateCredentials("user", "123456"))
-				.thenReturn(new UserValidationResponse(true, true, "user-id-1"));
+				.thenReturn(new UserValidationResponse(true, true, "user-id-1", Role.USER));
 
 		Instant accessExpiresAt = Instant.now().plusSeconds(1800);
-		when(jwtService.generateAccessToken("user-id-1"))
+		when(jwtService.generateAccessToken("user-id-1", Role.USER))
 				.thenReturn(new JwtService.GeneratedToken("access-token", "jti-1", accessExpiresAt));
-		when(authSessionRepository.create(anyString(), eq("user-id-1"), eq(Duration.ofMinutes(10080))))
+		when(authSessionRepository.create(anyString(), eq("user-id-1"), eq(Role.USER), eq(Duration.ofMinutes(10080))))
 				.thenReturn("session-1");
 
 		AuthResponse response = authService.authenticate("user", "123456");
@@ -64,14 +65,15 @@ class AuthServiceTest {
 		assertThat(response.access_token()).isEqualTo("access-token");
 		assertThat(response.refresh_token()).isNotBlank();
 		assertThat(response.expired_at()).isEqualTo(accessExpiresAt);
-		verify(authSessionRepository).create(eq(response.refresh_token()), eq("user-id-1"), eq(Duration.ofMinutes(10080)));
+		verify(authSessionRepository).create(eq(response.refresh_token()), eq("user-id-1"), eq(Role.USER),
+				eq(Duration.ofMinutes(10080)));
 		verify(authSessionRepository).linkAccessToken("jti-1", "session-1", Duration.ofMinutes(30));
 	}
 
 	@Test
 	void throwsInvalidCredentialsWhenCredentialsAreInvalid() {
 		when(userServiceClient.validateCredentials("user", "123456"))
-				.thenReturn(new UserValidationResponse(false, false, null));
+				.thenReturn(new UserValidationResponse(false, false, null, null));
 
 		assertThatThrownBy(() -> authService.authenticate("user", "123456"))
 				.isInstanceOf(InvalidCredentialsException.class);
@@ -81,7 +83,7 @@ class AuthServiceTest {
 	void validateTokenReturnsClaimsForValidBearerHeader() {
 		Instant expiresAt = Instant.now().plusSeconds(1800);
 		when(jwtService.validate("valid-token"))
-				.thenReturn(new JwtService.TokenClaims("user-id-1", "access", "jti-1", expiresAt));
+				.thenReturn(new JwtService.TokenClaims("user-id-1", "access", "jti-1", expiresAt, Role.USER));
 		when(authSessionRepository.isAccessTokenRevoked("jti-1")).thenReturn(false);
 
 		TokenValidationResponse response = authService.validateToken("Bearer valid-token");
@@ -89,13 +91,14 @@ class AuthServiceTest {
 		assertThat(response.user_id()).isEqualTo("user-id-1");
 		assertThat(response.token_type()).isEqualTo("access");
 		assertThat(response.expires_at()).isEqualTo(expiresAt);
+		assertThat(response.role()).isEqualTo(Role.USER);
 	}
 
 	@Test
 	void validateTokenThrowsInvalidTokenWhenAccessTokenWasRevoked() {
 		Instant expiresAt = Instant.now().plusSeconds(1800);
 		when(jwtService.validate("revoked-token"))
-				.thenReturn(new JwtService.TokenClaims("user-id-1", "access", "jti-1", expiresAt));
+				.thenReturn(new JwtService.TokenClaims("user-id-1", "access", "jti-1", expiresAt, Role.USER));
 		when(authSessionRepository.isAccessTokenRevoked("jti-1")).thenReturn(true);
 
 		assertThatThrownBy(() -> authService.validateToken("Bearer revoked-token"))
@@ -117,10 +120,10 @@ class AuthServiceTest {
 	@Test
 	void refreshReturnsNewTokensWhenRotationSucceeds() {
 		when(authSessionRepository.rotate(eq("old-refresh-token"), anyString(), eq(Duration.ofMinutes(10080))))
-				.thenReturn(AuthSessionRepository.RotationOutcome.rotated("user-id-1", "session-1"));
+				.thenReturn(AuthSessionRepository.RotationOutcome.rotated("user-id-1", Role.USER, "session-1"));
 
 		Instant accessExpiresAt = Instant.now().plusSeconds(1800);
-		when(jwtService.generateAccessToken("user-id-1"))
+		when(jwtService.generateAccessToken("user-id-1", Role.USER))
 				.thenReturn(new JwtService.GeneratedToken("new-access-token", "jti-2", accessExpiresAt));
 
 		AuthResponse response = authService.refresh("old-refresh-token");
@@ -153,7 +156,7 @@ class AuthServiceTest {
 	void logoutRevokesTheSessionForAValidAccessToken() {
 		Instant expiresAt = Instant.now().plusSeconds(1800);
 		when(jwtService.validate("valid-token"))
-				.thenReturn(new JwtService.TokenClaims("user-id-1", "access", "jti-1", expiresAt));
+				.thenReturn(new JwtService.TokenClaims("user-id-1", "access", "jti-1", expiresAt, Role.USER));
 
 		authService.logout("Bearer valid-token");
 

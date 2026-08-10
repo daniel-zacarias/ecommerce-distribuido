@@ -1,6 +1,7 @@
 package com.zaca.ecommerce.authService.service;
 
 import com.zaca.ecommerce.authService.config.JwtProperties;
+import com.zaca.ecommerce.authService.dto.Role;
 import com.zaca.ecommerce.authService.exception.InvalidTokenException;
 import com.zaca.ecommerce.authService.exception.TokenExpiredException;
 import io.jsonwebtoken.Claims;
@@ -27,7 +28,7 @@ class JwtServiceTest {
 
 	@Test
 	void accessTokenContainsExpirationAndUniqueId() {
-		JwtService.GeneratedToken token = jwtService.generateAccessToken("user-id-1");
+		JwtService.GeneratedToken token = jwtService.generateAccessToken("user-id-1", Role.USER);
 
 		Claims claims = parseClaims(token.token());
 
@@ -35,6 +36,7 @@ class JwtServiceTest {
 		assertThat(claims.getId()).isNotBlank();
 		assertThat(claims.getId()).isEqualTo(token.jti());
 		assertThat(claims.get("type", String.class)).isEqualTo("access");
+		assertThat(claims.get("role", String.class)).isEqualTo("USER");
 		assertThat(claims.getExpiration().toInstant()).isEqualTo(token.expiresAt().truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
 		assertThat(token.expiresAt()).isAfter(Instant.now().plusSeconds(1700));
 		assertThat(token.expiresAt()).isBefore(Instant.now().plusSeconds(1900));
@@ -42,7 +44,7 @@ class JwtServiceTest {
 
 	@Test
 	void validateReturnsClaimsForValidToken() {
-		JwtService.GeneratedToken token = jwtService.generateAccessToken("user-id-1");
+		JwtService.GeneratedToken token = jwtService.generateAccessToken("user-id-1", Role.ADMIN);
 
 		JwtService.TokenClaims claims = jwtService.validate(token.token());
 
@@ -50,6 +52,7 @@ class JwtServiceTest {
 		assertThat(claims.tokenType()).isEqualTo("access");
 		assertThat(claims.jti()).isEqualTo(token.jti());
 		assertThat(claims.expiresAt()).isEqualTo(token.expiresAt().truncatedTo(ChronoUnit.SECONDS));
+		assertThat(claims.role()).isEqualTo(Role.ADMIN);
 	}
 
 	@Test

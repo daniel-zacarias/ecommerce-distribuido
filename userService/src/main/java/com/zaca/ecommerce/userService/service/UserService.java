@@ -4,10 +4,13 @@ import com.zaca.ecommerce.userService.client.AuthServiceClient;
 import com.zaca.ecommerce.userService.dto.TokenValidationResponse;
 import com.zaca.ecommerce.userService.dto.UserResponse;
 import com.zaca.ecommerce.userService.dto.UserVerificationResponse;
+import com.zaca.ecommerce.userService.entity.Role;
 import com.zaca.ecommerce.userService.entity.User;
 import com.zaca.ecommerce.userService.exception.DuplicateEmailException;
+import com.zaca.ecommerce.userService.exception.ForbiddenException;
 import com.zaca.ecommerce.userService.exception.InvalidTokenException;
 import com.zaca.ecommerce.userService.exception.NoUpdatableFieldsException;
+import com.zaca.ecommerce.userService.exception.UserNotFoundException;
 import com.zaca.ecommerce.userService.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -47,6 +50,7 @@ public class UserService {
 				.name(name)
 				.email(email)
 				.password(passwordEncoder.encode(rawPassword))
+				.role(Role.USER)
 				.createdAt(now)
 				.updatedAt(now)
 				.build();
@@ -85,6 +89,18 @@ public class UserService {
 		userRepository.save(user);
 	}
 
+	public UserResponse getUserForAdmin(String authorizationHeader, UUID targetId) {
+		User caller = resolveCurrentUser(authorizationHeader);
+		if (caller.getRole() != Role.ADMIN) {
+			throw new ForbiddenException("Admin role required");
+		}
+
+		User target = userRepository.findById(targetId)
+				.orElseThrow(() -> new UserNotFoundException("User not found"));
+
+		return new UserResponse(target.getId(), target.getName(), target.getEmail(), target.getCreatedAt());
+	}
+
 	private User resolveCurrentUser(String authorizationHeader) {
 		if (!StringUtils.hasText(authorizationHeader) || !authorizationHeader.startsWith("Bearer ")) {
 			throw new InvalidTokenException("Authorization header is missing or malformed");
@@ -109,6 +125,7 @@ public class UserService {
 		// caller, so both collapse to exists=false, valid=false, user_id=null.
 		boolean isValid = userOpt.isPresent() && matches;
 		UUID userId = isValid ? userOpt.get().getId() : null;
-		return new UserVerificationResponse(isValid, isValid, userId);
+		Role role = isValid ? userOpt.get().getRole() : null;
+		return new UserVerificationResponse(isValid, isValid, userId, role);
 	}
 }

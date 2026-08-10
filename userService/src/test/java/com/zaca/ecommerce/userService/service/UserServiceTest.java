@@ -4,10 +4,13 @@ import com.zaca.ecommerce.userService.client.AuthServiceClient;
 import com.zaca.ecommerce.userService.dto.TokenValidationResponse;
 import com.zaca.ecommerce.userService.dto.UserResponse;
 import com.zaca.ecommerce.userService.dto.UserVerificationResponse;
+import com.zaca.ecommerce.userService.entity.Role;
 import com.zaca.ecommerce.userService.entity.User;
 import com.zaca.ecommerce.userService.exception.DuplicateEmailException;
+import com.zaca.ecommerce.userService.exception.ForbiddenException;
 import com.zaca.ecommerce.userService.exception.InvalidTokenException;
 import com.zaca.ecommerce.userService.exception.NoUpdatableFieldsException;
+import com.zaca.ecommerce.userService.exception.UserNotFoundException;
 import com.zaca.ecommerce.userService.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -81,12 +84,13 @@ class UserServiceTest {
 		UUID userId = UUID.randomUUID();
 		Instant now = Instant.now();
 		when(authServiceClient.validate("Bearer valid-token"))
-				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60)));
+				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60), Role.USER));
 		User user = User.builder()
 				.id(userId)
 				.name("User")
 				.email("user@test.com")
 				.password("hashed-password")
+				.role(Role.USER)
 				.createdAt(now)
 				.updatedAt(now)
 				.build();
@@ -119,7 +123,7 @@ class UserServiceTest {
 	void throwsInvalidTokenWhenUserIsNotFoundAfterValidation() {
 		UUID userId = UUID.randomUUID();
 		when(authServiceClient.validate("Bearer valid-token"))
-				.thenReturn(new TokenValidationResponse(userId.toString(), "access", Instant.now().plusSeconds(60)));
+				.thenReturn(new TokenValidationResponse(userId.toString(), "access", Instant.now().plusSeconds(60), Role.USER));
 		when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> userService.getCurrentUser("Bearer valid-token"))
@@ -131,12 +135,13 @@ class UserServiceTest {
 		UUID userId = UUID.randomUUID();
 		Instant now = Instant.now();
 		when(authServiceClient.validate("Bearer valid-token"))
-				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60)));
+				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60), Role.USER));
 		User user = User.builder()
 				.id(userId)
 				.name("Old Name")
 				.email("old@test.com")
 				.password("hashed-password")
+				.role(Role.USER)
 				.createdAt(now)
 				.updatedAt(now)
 				.build();
@@ -158,12 +163,13 @@ class UserServiceTest {
 		UUID userId = UUID.randomUUID();
 		Instant now = Instant.now();
 		when(authServiceClient.validate("Bearer valid-token"))
-				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60)));
+				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60), Role.USER));
 		User user = User.builder()
 				.id(userId)
 				.name("Old Name")
 				.email("old@test.com")
 				.password("hashed-password")
+				.role(Role.USER)
 				.createdAt(now)
 				.updatedAt(now)
 				.build();
@@ -184,12 +190,13 @@ class UserServiceTest {
 		UUID userId = UUID.randomUUID();
 		Instant now = Instant.now();
 		when(authServiceClient.validate("Bearer valid-token"))
-				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60)));
+				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60), Role.USER));
 		User user = User.builder()
 				.id(userId)
 				.name("Old Name")
 				.email("old@test.com")
 				.password("hashed-password")
+				.role(Role.USER)
 				.createdAt(now)
 				.updatedAt(now)
 				.build();
@@ -210,12 +217,13 @@ class UserServiceTest {
 		UUID userId = UUID.randomUUID();
 		Instant now = Instant.now();
 		when(authServiceClient.validate("Bearer valid-token"))
-				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60)));
+				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60), Role.USER));
 		User user = User.builder()
 				.id(userId)
 				.name("Old Name")
 				.email("old@test.com")
 				.password("hashed-password")
+				.role(Role.USER)
 				.createdAt(now)
 				.updatedAt(now)
 				.build();
@@ -233,12 +241,13 @@ class UserServiceTest {
 		UUID userId = UUID.randomUUID();
 		Instant now = Instant.now();
 		when(authServiceClient.validate("Bearer valid-token"))
-				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60)));
+				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60), Role.USER));
 		User user = User.builder()
 				.id(userId)
 				.name("Old Name")
 				.email("user@test.com")
 				.password("hashed-password")
+				.role(Role.USER)
 				.createdAt(now)
 				.updatedAt(now)
 				.build();
@@ -256,12 +265,13 @@ class UserServiceTest {
 		UUID userId = UUID.randomUUID();
 		Instant now = Instant.now();
 		when(authServiceClient.validate("Bearer valid-token"))
-				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60)));
+				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60), Role.USER));
 		User user = User.builder()
 				.id(userId)
 				.name("Old Name")
 				.email("user@test.com")
 				.password("hashed-password")
+				.role(Role.USER)
 				.createdAt(now)
 				.updatedAt(now)
 				.build();
@@ -293,11 +303,103 @@ class UserServiceTest {
 	void throwsInvalidTokenWhenUpdateUserIsNotFoundAfterValidation() {
 		UUID userId = UUID.randomUUID();
 		when(authServiceClient.validate("Bearer valid-token"))
-				.thenReturn(new TokenValidationResponse(userId.toString(), "access", Instant.now().plusSeconds(60)));
+				.thenReturn(new TokenValidationResponse(userId.toString(), "access", Instant.now().plusSeconds(60), Role.USER));
 		when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> userService.updateCurrentUser("Bearer valid-token", "New Name", null))
 				.isInstanceOf(InvalidTokenException.class);
+	}
+
+	@Test
+	void returnsUserWhenAdminQueriesExistingUser() {
+		UUID callerId = UUID.randomUUID();
+		UUID targetId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer admin-token"))
+				.thenReturn(new TokenValidationResponse(callerId.toString(), "access", now.plusSeconds(60), Role.ADMIN));
+		User caller = User.builder()
+				.id(callerId)
+				.name("Admin")
+				.email("admin@test.com")
+				.password("hashed-password")
+				.role(Role.ADMIN)
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		User target = User.builder()
+				.id(targetId)
+				.name("Target User")
+				.email("target@test.com")
+				.password("hashed-password")
+				.role(Role.USER)
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		when(userRepository.findById(callerId)).thenReturn(Optional.of(caller));
+		when(userRepository.findById(targetId)).thenReturn(Optional.of(target));
+
+		UserResponse response = userService.getUserForAdmin("Bearer admin-token", targetId);
+
+		assertThat(response.id()).isEqualTo(targetId);
+		assertThat(response.name()).isEqualTo("Target User");
+		assertThat(response.email()).isEqualTo("target@test.com");
+	}
+
+	@Test
+	void throwsUserNotFoundWhenAdminQueriesNonExistingUser() {
+		UUID callerId = UUID.randomUUID();
+		UUID targetId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer admin-token"))
+				.thenReturn(new TokenValidationResponse(callerId.toString(), "access", now.plusSeconds(60), Role.ADMIN));
+		User caller = User.builder()
+				.id(callerId)
+				.name("Admin")
+				.email("admin@test.com")
+				.password("hashed-password")
+				.role(Role.ADMIN)
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		when(userRepository.findById(callerId)).thenReturn(Optional.of(caller));
+		when(userRepository.findById(targetId)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> userService.getUserForAdmin("Bearer admin-token", targetId))
+				.isInstanceOf(UserNotFoundException.class);
+	}
+
+	@Test
+	void throwsForbiddenWhenNonAdminQueriesUser() {
+		UUID callerId = UUID.randomUUID();
+		UUID targetId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer user-token"))
+				.thenReturn(new TokenValidationResponse(callerId.toString(), "access", now.plusSeconds(60), Role.USER));
+		User caller = User.builder()
+				.id(callerId)
+				.name("Regular User")
+				.email("user@test.com")
+				.password("hashed-password")
+				.role(Role.USER)
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		when(userRepository.findById(callerId)).thenReturn(Optional.of(caller));
+
+		assertThatThrownBy(() -> userService.getUserForAdmin("Bearer user-token", targetId))
+				.isInstanceOf(ForbiddenException.class);
+
+		verify(userRepository, never()).findById(targetId);
+	}
+
+	@Test
+	void throwsInvalidTokenWhenAdminQueryAuthorizationHeaderIsMissing() {
+		UUID targetId = UUID.randomUUID();
+
+		assertThatThrownBy(() -> userService.getUserForAdmin(null, targetId))
+				.isInstanceOf(InvalidTokenException.class);
+
+		verifyNoInteractions(authServiceClient);
 	}
 
 	@Test
@@ -309,6 +411,7 @@ class UserServiceTest {
 				.name("User")
 				.email("user@test.com")
 				.password("hashed-password")
+				.role(Role.USER)
 				.createdAt(now)
 				.updatedAt(now)
 				.build();
@@ -330,6 +433,7 @@ class UserServiceTest {
 				.name("User")
 				.email("user@test.com")
 				.password("hashed-password")
+				.role(Role.USER)
 				.createdAt(now)
 				.updatedAt(now)
 				.build();
