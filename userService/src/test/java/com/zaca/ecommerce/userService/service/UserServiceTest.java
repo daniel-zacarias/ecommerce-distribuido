@@ -404,6 +404,97 @@ class UserServiceTest {
 	}
 
 	@Test
+	void createsAdminUserWhenCallerIsAdmin() {
+		UUID callerId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer admin-token"))
+				.thenReturn(new TokenValidationResponse(callerId.toString(), "access", now.plusSeconds(60), Role.ADMIN));
+		User caller = User.builder()
+				.id(callerId)
+				.name("Admin")
+				.email("admin@test.com")
+				.password("hashed-password")
+				.role(Role.ADMIN)
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		when(userRepository.findById(callerId)).thenReturn(Optional.of(caller));
+		when(userRepository.existsByEmail("new-admin@test.com")).thenReturn(false);
+		when(passwordEncoder.encode("senha123")).thenReturn("hashed-password");
+		when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+		UserResponse response = userService.createAdminAsAdmin(
+				"Bearer admin-token", "New Admin", "new-admin@test.com", "senha123");
+
+		assertThat(response.name()).isEqualTo("New Admin");
+		assertThat(response.email()).isEqualTo("new-admin@test.com");
+
+		ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+		verify(userRepository).save(captor.capture());
+		assertThat(captor.getValue().getRole()).isEqualTo(Role.ADMIN);
+		assertThat(captor.getValue().getPassword()).isEqualTo("hashed-password");
+	}
+
+	@Test
+	void throwsDuplicateEmailWhenAdminCreatesUserWithExistingEmail() {
+		UUID callerId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer admin-token"))
+				.thenReturn(new TokenValidationResponse(callerId.toString(), "access", now.plusSeconds(60), Role.ADMIN));
+		User caller = User.builder()
+				.id(callerId)
+				.name("Admin")
+				.email("admin@test.com")
+				.password("hashed-password")
+				.role(Role.ADMIN)
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		when(userRepository.findById(callerId)).thenReturn(Optional.of(caller));
+		when(userRepository.existsByEmail("new-admin@test.com")).thenReturn(true);
+
+		assertThatThrownBy(() -> userService.createAdminAsAdmin(
+				"Bearer admin-token", "New Admin", "new-admin@test.com", "senha123"))
+				.isInstanceOf(DuplicateEmailException.class);
+
+		verify(userRepository, never()).save(any(User.class));
+	}
+
+	@Test
+	void throwsForbiddenWhenNonAdminCreatesAdmin() {
+		UUID callerId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer user-token"))
+				.thenReturn(new TokenValidationResponse(callerId.toString(), "access", now.plusSeconds(60), Role.USER));
+		User caller = User.builder()
+				.id(callerId)
+				.name("Regular User")
+				.email("user@test.com")
+				.password("hashed-password")
+				.role(Role.USER)
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		when(userRepository.findById(callerId)).thenReturn(Optional.of(caller));
+
+		assertThatThrownBy(() -> userService.createAdminAsAdmin(
+				"Bearer user-token", "New Admin", "new-admin@test.com", "senha123"))
+				.isInstanceOf(ForbiddenException.class);
+
+		verify(userRepository, never()).save(any(User.class));
+		verify(userRepository, never()).existsByEmail(anyString());
+	}
+
+	@Test
+	void throwsInvalidTokenWhenCreateAdminTokenIsInvalidOrMissing() {
+		assertThatThrownBy(() -> userService.createAdminAsAdmin(
+				null, "New Admin", "new-admin@test.com", "senha123"))
+				.isInstanceOf(InvalidTokenException.class);
+
+		verifyNoInteractions(authServiceClient);
+	}
+
+	@Test
 	void deletesUserAndRevokesSessionsWhenAdminDeletesExistingUser() {
 		UUID callerId = UUID.randomUUID();
 		UUID targetId = UUID.randomUUID();

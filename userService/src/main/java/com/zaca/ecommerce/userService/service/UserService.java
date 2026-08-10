@@ -41,6 +41,20 @@ public class UserService {
 	}
 
 	public UserResponse register(String name, String email, String rawPassword) {
+		return createUser(name, email, rawPassword, Role.USER);
+	}
+
+	public UserResponse createAdminAsAdmin(String authorizationHeader, String name, String email,
+			String rawPassword) {
+		User caller = resolveCurrentUser(authorizationHeader);
+		if (caller.getRole() != Role.ADMIN) {
+			throw new ForbiddenException("Admin role required");
+		}
+
+		return createUser(name, email, rawPassword, Role.ADMIN);
+	}
+
+	private UserResponse createUser(String name, String email, String rawPassword, Role role) {
 		if (userRepository.existsByEmail(email)) {
 			throw new DuplicateEmailException("Email already in use");
 		}
@@ -51,7 +65,7 @@ public class UserService {
 				.name(name)
 				.email(email)
 				.password(passwordEncoder.encode(rawPassword))
-				.role(Role.USER)
+				.role(role)
 				.createdAt(now)
 				.updatedAt(now)
 				.build();
