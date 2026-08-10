@@ -10,6 +10,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,14 +39,40 @@ class UserRepositoryIntegrationTest {
 		User user = User.builder()
 				.id(UUID.randomUUID())
 				.name("Daniel")
-				.email("daniel@test.com")
+				.email("user@test.com")
 				.password("hashed-password")
 				.createdAt(now)
 				.updatedAt(now)
 				.build();
 		userRepository.save(user);
 
-		assertThat(userRepository.existsByEmail("daniel@test.com")).isTrue();
+		assertThat(userRepository.existsByEmail("user@test.com")).isTrue();
 		assertThat(userRepository.existsByEmail("other@test.com")).isFalse();
+	}
+
+	@Test
+	void findByEmailReturnsUserWhenPresent() {
+		Instant now = Instant.now();
+		User user = User.builder()
+				.id(UUID.randomUUID())
+				.name("Daniel")
+				.email("user2@test.com")
+				.password("hashed-password")
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		userRepository.save(user);
+
+		Optional<User> found = userRepository.findByEmail("user2@test.com");
+
+		assertThat(found).isPresent();
+		assertThat(found.get().getEmail()).isEqualTo("user2@test.com");
+	}
+
+	@Test
+	void findByEmailReturnsEmptyWhenAbsent() {
+		Optional<User> found = userRepository.findByEmail("missing@test.com");
+
+		assertThat(found).isEmpty();
 	}
 }
