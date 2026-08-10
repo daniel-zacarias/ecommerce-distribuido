@@ -54,9 +54,9 @@ class UserServiceTest {
 		when(passwordEncoder.encode("senha123")).thenReturn("hashed-password");
 		when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-		UserResponse response = userService.register("Daniel", "user@test.com", "senha123");
+		UserResponse response = userService.register("User", "user@test.com", "senha123");
 
-		assertThat(response.name()).isEqualTo("Daniel");
+		assertThat(response.name()).isEqualTo("User");
 		assertThat(response.email()).isEqualTo("user@test.com");
 
 		ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
@@ -68,7 +68,7 @@ class UserServiceTest {
 	void throwsDuplicateEmailWhenEmailAlreadyExists() {
 		when(userRepository.existsByEmail("user@test.com")).thenReturn(true);
 
-		assertThatThrownBy(() -> userService.register("Daniel", "user@test.com", "senha123"))
+		assertThatThrownBy(() -> userService.register("User", "user@test.com", "senha123"))
 				.isInstanceOf(DuplicateEmailException.class);
 
 		verify(userRepository, never()).save(any(User.class));
@@ -83,7 +83,7 @@ class UserServiceTest {
 				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60)));
 		User user = User.builder()
 				.id(userId)
-				.name("Daniel")
+				.name("User")
 				.email("user@test.com")
 				.password("hashed-password")
 				.createdAt(now)
@@ -94,7 +94,7 @@ class UserServiceTest {
 		UserResponse response = userService.getCurrentUser("Bearer valid-token");
 
 		assertThat(response.id()).isEqualTo(userId);
-		assertThat(response.name()).isEqualTo("Daniel");
+		assertThat(response.name()).isEqualTo("User");
 		assertThat(response.email()).isEqualTo("user@test.com");
 	}
 
@@ -131,7 +131,7 @@ class UserServiceTest {
 		Instant now = Instant.now();
 		User user = User.builder()
 				.id(userId)
-				.name("Daniel")
+				.name("User")
 				.email("user@test.com")
 				.password("hashed-password")
 				.createdAt(now)
@@ -152,7 +152,7 @@ class UserServiceTest {
 		Instant now = Instant.now();
 		User user = User.builder()
 				.id(UUID.randomUUID())
-				.name("Daniel")
+				.name("User")
 				.email("user@test.com")
 				.password("hashed-password")
 				.createdAt(now)

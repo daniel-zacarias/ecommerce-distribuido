@@ -37,12 +37,12 @@ class UserControllerTest {
 	void returns201WhenRegistrationSucceeds() throws Exception {
 		UUID id = UUID.randomUUID();
 		when(userService.register(anyString(), anyString(), anyString()))
-				.thenReturn(new UserResponse(id, "Daniel", "user@test.com", Instant.now()));
+				.thenReturn(new UserResponse(id, "User", "user@test.com", Instant.now()));
 
 		mockMvc.perform(post("/users")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
-								{"name":"Daniel","email":"user@test.com","password":"senha123"}
+								{"name":"User","email":"user@test.com","password":"senha123"}
 								"""))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.email").value("user@test.com"));
@@ -53,7 +53,7 @@ class UserControllerTest {
 		mockMvc.perform(post("/users")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
-								{"name":"Daniel","email":"not-an-email","password":"senha123"}
+								{"name":"User","email":"not-an-email","password":"senha123"}
 								"""))
 				.andExpect(status().isBadRequest());
 	}
@@ -63,7 +63,7 @@ class UserControllerTest {
 		mockMvc.perform(post("/users")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
-								{"name":"Daniel","email":"user@test.com","password":"abc"}
+								{"name":"User","email":"user@test.com","password":"abc"}
 								"""))
 				.andExpect(status().isBadRequest());
 	}
@@ -76,7 +76,7 @@ class UserControllerTest {
 		mockMvc.perform(post("/users")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
-								{"name":"Daniel","email":"user@test.com","password":"senha123"}
+								{"name":"User","email":"user@test.com","password":"senha123"}
 								"""))
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.message").value("Email already in use"));
@@ -86,11 +86,11 @@ class UserControllerTest {
 	void returns200WithOwnDataWhenTokenIsValid() throws Exception {
 		UUID id = UUID.randomUUID();
 		when(userService.getCurrentUser(anyString()))
-				.thenReturn(new UserResponse(id, "Daniel", "user@test.com", Instant.now()));
+				.thenReturn(new UserResponse(id, "User", "user@test.com", Instant.now()));
 
 		mockMvc.perform(get("/me").header("Authorization", "Bearer valid-token"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.name").value("Daniel"))
+				.andExpect(jsonPath("$.name").value("User"))
 				.andExpect(jsonPath("$.email").value("user@test.com"))
 				.andExpect(jsonPath("$.password").doesNotExist());
 	}

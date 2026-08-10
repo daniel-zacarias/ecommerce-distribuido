@@ -38,7 +38,7 @@ class UserRepositoryIntegrationTest {
 		Instant now = Instant.now();
 		User user = User.builder()
 				.id(UUID.randomUUID())
-				.name("Daniel")
+				.name("User")
 				.email("user@test.com")
 				.password("hashed-password")
 				.createdAt(now)
@@ -55,7 +55,7 @@ class UserRepositoryIntegrationTest {
 		Instant now = Instant.now();
 		User user = User.builder()
 				.id(UUID.randomUUID())
-				.name("Daniel")
+				.name("User")
 				.email("user2@test.com")
 				.password("hashed-password")
 				.createdAt(now)
