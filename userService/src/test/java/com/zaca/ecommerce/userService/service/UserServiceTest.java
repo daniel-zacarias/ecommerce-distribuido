@@ -10,6 +10,7 @@ import com.zaca.ecommerce.userService.exception.DuplicateEmailException;
 import com.zaca.ecommerce.userService.exception.ForbiddenException;
 import com.zaca.ecommerce.userService.exception.InvalidTokenException;
 import com.zaca.ecommerce.userService.exception.NoUpdatableFieldsException;
+import com.zaca.ecommerce.userService.exception.SelfDeletionNotAllowedException;
 import com.zaca.ecommerce.userService.exception.UserNotFoundException;
 import com.zaca.ecommerce.userService.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -400,6 +401,196 @@ class UserServiceTest {
 				.isInstanceOf(InvalidTokenException.class);
 
 		verifyNoInteractions(authServiceClient);
+	}
+
+	@Test
+	void deletesUserAndRevokesSessionsWhenAdminDeletesExistingUser() {
+		UUID callerId = UUID.randomUUID();
+		UUID targetId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer admin-token"))
+				.thenReturn(new TokenValidationResponse(callerId.toString(), "access", now.plusSeconds(60), Role.ADMIN));
+		User caller = User.builder()
+				.id(callerId)
+				.name("Admin")
+				.email("admin@test.com")
+				.password("hashed-password")
+				.role(Role.ADMIN)
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		User target = User.builder()
+				.id(targetId)
+				.name("Target User")
+				.email("target@test.com")
+				.password("hashed-password")
+				.role(Role.USER)
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		when(userRepository.findById(callerId)).thenReturn(Optional.of(caller));
+		when(userRepository.findById(targetId)).thenReturn(Optional.of(target));
+		when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+		userService.deleteUserAsAdmin("Bearer admin-token", targetId);
+
+		verify(authServiceClient).revokeSessions(targetId);
+		ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+		verify(userRepository).save(captor.capture());
+		assertThat(captor.getValue().getDeletedAt()).isNotNull();
+	}
+
+	@Test
+	void throwsUserNotFoundWhenAdminDeletesNonExistingUser() {
+		UUID callerId = UUID.randomUUID();
+		UUID targetId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer admin-token"))
+				.thenReturn(new TokenValidationResponse(callerId.toString(), "access", now.plusSeconds(60), Role.ADMIN));
+		User caller = User.builder()
+				.id(callerId)
+				.name("Admin")
+				.email("admin@test.com")
+				.password("hashed-password")
+				.role(Role.ADMIN)
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		when(userRepository.findById(callerId)).thenReturn(Optional.of(caller));
+		when(userRepository.findById(targetId)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> userService.deleteUserAsAdmin("Bearer admin-token", targetId))
+				.isInstanceOf(UserNotFoundException.class);
+
+		verify(authServiceClient, never()).revokeSessions(any(UUID.class));
+		verify(userRepository, never()).save(any(User.class));
+	}
+
+	@Test
+	void throwsUserNotFoundWhenAdminDeletesAlreadyDeletedUser() {
+		UUID callerId = UUID.randomUUID();
+		UUID targetId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer admin-token"))
+				.thenReturn(new TokenValidationResponse(callerId.toString(), "access", now.plusSeconds(60), Role.ADMIN));
+		User caller = User.builder()
+				.id(callerId)
+				.name("Admin")
+				.email("admin@test.com")
+				.password("hashed-password")
+				.role(Role.ADMIN)
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		User target = User.builder()
+				.id(targetId)
+				.name("Target User")
+				.email("target@test.com")
+				.password("hashed-password")
+				.role(Role.USER)
+				.createdAt(now)
+				.updatedAt(now)
+				.deletedAt(now)
+				.build();
+		when(userRepository.findById(callerId)).thenReturn(Optional.of(caller));
+		when(userRepository.findById(targetId)).thenReturn(Optional.of(target));
+
+		assertThatThrownBy(() -> userService.deleteUserAsAdmin("Bearer admin-token", targetId))
+				.isInstanceOf(UserNotFoundException.class);
+
+		verify(userRepository, never()).save(any(User.class));
+	}
+
+	@Test
+	void throwsForbiddenWhenNonAdminDeletesUser() {
+		UUID callerId = UUID.randomUUID();
+		UUID targetId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer user-token"))
+				.thenReturn(new TokenValidationResponse(callerId.toString(), "access", now.plusSeconds(60), Role.USER));
+		User caller = User.builder()
+				.id(callerId)
+				.name("Regular User")
+				.email("user@test.com")
+				.password("hashed-password")
+				.role(Role.USER)
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		when(userRepository.findById(callerId)).thenReturn(Optional.of(caller));
+
+		assertThatThrownBy(() -> userService.deleteUserAsAdmin("Bearer user-token", targetId))
+				.isInstanceOf(ForbiddenException.class);
+
+		verify(userRepository, never()).findById(targetId);
+	}
+
+	@Test
+	void throwsSelfDeletionNotAllowedWhenAdminDeletesOwnAccount() {
+		UUID callerId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer admin-token"))
+				.thenReturn(new TokenValidationResponse(callerId.toString(), "access", now.plusSeconds(60), Role.ADMIN));
+		User caller = User.builder()
+				.id(callerId)
+				.name("Admin")
+				.email("admin@test.com")
+				.password("hashed-password")
+				.role(Role.ADMIN)
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		when(userRepository.findById(callerId)).thenReturn(Optional.of(caller));
+
+		assertThatThrownBy(() -> userService.deleteUserAsAdmin("Bearer admin-token", callerId))
+				.isInstanceOf(SelfDeletionNotAllowedException.class);
+
+		verify(userRepository, never()).save(any(User.class));
+	}
+
+	@Test
+	void throwsInvalidTokenWhenDeletedUserPresentsValidToken() {
+		UUID userId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer valid-token"))
+				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60), Role.USER));
+		User user = User.builder()
+				.id(userId)
+				.name("User")
+				.email("user@test.com")
+				.password("hashed-password")
+				.role(Role.USER)
+				.createdAt(now)
+				.updatedAt(now)
+				.deletedAt(now)
+				.build();
+		when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+		assertThatThrownBy(() -> userService.getCurrentUser("Bearer valid-token"))
+				.isInstanceOf(InvalidTokenException.class);
+	}
+
+	@Test
+	void verifyCredentialsFailsForDeletedUser() {
+		Instant now = Instant.now();
+		User user = User.builder()
+				.id(UUID.randomUUID())
+				.name("User")
+				.email("user@test.com")
+				.password("hashed-password")
+				.role(Role.USER)
+				.createdAt(now)
+				.updatedAt(now)
+				.deletedAt(now)
+				.build();
+		when(userRepository.findByEmail("user@test.com")).thenReturn(Optional.of(user));
+		when(passwordEncoder.matches(anyString(), anyString())).thenReturn(true);
+
+		UserVerificationResponse response = userService.verifyCredentials("user@test.com", "senha123");
+
+		assertThat(response.exists()).isFalse();
+		assertThat(response.valid()).isFalse();
+		assertThat(response.user_id()).isNull();
 	}
 
 	@Test

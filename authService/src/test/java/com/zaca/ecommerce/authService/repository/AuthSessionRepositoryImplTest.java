@@ -8,6 +8,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.HashOperations;
+import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -15,6 +16,7 @@ import org.springframework.data.redis.core.script.RedisScript;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -46,12 +48,16 @@ class AuthSessionRepositoryImplTest {
 	@Mock
 	private HashOperations<String, Object, Object> hashOperations;
 
+	@Mock
+	private SetOperations<String, String> setOperations;
+
 	private AuthSessionRepositoryImpl repository;
 
 	@BeforeEach
 	void setUp() {
-		when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+		lenient().doReturn(valueOperations).when(redisTemplate).opsForValue();
 		lenient().doReturn(hashOperations).when(redisTemplate).opsForHash();
+		lenient().doReturn(setOperations).when(redisTemplate).opsForSet();
 		repository = new AuthSessionRepositoryImpl(redisTemplate);
 	}
 
@@ -67,6 +73,33 @@ class AuthSessionRepositoryImplTest {
 		verify(hashOperations).putAll(eq(expectedSessionKey),
 				eq(Map.of("currentToken", "token-1", "userId", "user-1", "role", "USER")));
 		verify(redisTemplate).expire(expectedSessionKey, TTL);
+	}
+
+	@Test
+	void createAddsSessionToUserIndex() {
+		String sessionId = repository.create("token-1", "user-1", Role.USER, TTL);
+
+		verify(setOperations).add("user-sessions:user-1", sessionId);
+		verify(redisTemplate).expire("user-sessions:user-1", TTL);
+	}
+
+	@Test
+	void revokeAllForUserMarksEverySessionInTheIndexAsRevoked() {
+		when(setOperations.members("user-sessions:user-1")).thenReturn(Set.of("session-a", "session-b"));
+
+		repository.revokeAllForUser("user-1");
+
+		verify(hashOperations).put("refresh-session:session-a", "revoked", "1");
+		verify(hashOperations).put("refresh-session:session-b", "revoked", "1");
+	}
+
+	@Test
+	void revokeAllForUserIsNoOpWhenUserHasNoSessions() {
+		when(setOperations.members("user-sessions:unknown-user")).thenReturn(null);
+
+		repository.revokeAllForUser("unknown-user");
+
+		verify(hashOperations, never()).put(anyString(), any(), any());
 	}
 
 	@Test

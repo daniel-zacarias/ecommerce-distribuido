@@ -50,6 +50,11 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(ex.getMessage()));
 	}
 
+	@ExceptionHandler(SelfDeletionNotAllowedException.class)
+	public ResponseEntity<ErrorResponse> handleSelfDeletionNotAllowed(SelfDeletionNotAllowedException ex) {
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(ex.getMessage()));
+	}
+
 	@ExceptionHandler(AuthServiceUnavailableException.class)
 	public ResponseEntity<ErrorResponse> handleAuthServiceUnavailable(AuthServiceUnavailableException ex) {
 		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)

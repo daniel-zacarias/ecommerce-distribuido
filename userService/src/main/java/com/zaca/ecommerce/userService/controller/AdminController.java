@@ -1,8 +1,10 @@
 package com.zaca.ecommerce.userService.controller;
 
+import com.zaca.ecommerce.userService.dto.MessageResponse;
 import com.zaca.ecommerce.userService.dto.UserResponse;
 import com.zaca.ecommerce.userService.service.UserService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -25,5 +27,13 @@ public class AdminController {
 			@PathVariable UUID id) {
 		UserResponse response = userService.getUserForAdmin(authorizationHeader, id);
 		return ResponseEntity.ok(response);
+	}
+
+	@DeleteMapping("/admin/users/{id}")
+	public ResponseEntity<MessageResponse> deleteUserAsAdmin(
+			@RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+			@PathVariable UUID id) {
+		userService.deleteUserAsAdmin(authorizationHeader, id);
+		return ResponseEntity.ok(new MessageResponse("User deleted successfully"));
 	}
 }

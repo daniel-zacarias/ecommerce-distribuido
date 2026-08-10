@@ -10,6 +10,7 @@ import com.zaca.ecommerce.userService.exception.DuplicateEmailException;
 import com.zaca.ecommerce.userService.exception.ForbiddenException;
 import com.zaca.ecommerce.userService.exception.InvalidTokenException;
 import com.zaca.ecommerce.userService.exception.NoUpdatableFieldsException;
+import com.zaca.ecommerce.userService.exception.SelfDeletionNotAllowedException;
 import com.zaca.ecommerce.userService.exception.UserNotFoundException;
 import com.zaca.ecommerce.userService.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -96,9 +97,29 @@ public class UserService {
 		}
 
 		User target = userRepository.findById(targetId)
+				.filter(user -> user.getDeletedAt() == null)
 				.orElseThrow(() -> new UserNotFoundException("User not found"));
 
 		return new UserResponse(target.getId(), target.getName(), target.getEmail(), target.getCreatedAt());
+	}
+
+	public void deleteUserAsAdmin(String authorizationHeader, UUID targetId) {
+		User caller = resolveCurrentUser(authorizationHeader);
+		if (caller.getRole() != Role.ADMIN) {
+			throw new ForbiddenException("Admin role required");
+		}
+		if (caller.getId().equals(targetId)) {
+			throw new SelfDeletionNotAllowedException("Admins cannot delete their own account");
+		}
+
+		User target = userRepository.findById(targetId)
+				.filter(user -> user.getDeletedAt() == null)
+				.orElseThrow(() -> new UserNotFoundException("User not found"));
+
+		authServiceClient.revokeSessions(target.getId());
+
+		target.setDeletedAt(Instant.now());
+		userRepository.save(target);
 	}
 
 	private User resolveCurrentUser(String authorizationHeader) {
@@ -109,12 +130,18 @@ public class UserService {
 		TokenValidationResponse validation = authServiceClient.validate(authorizationHeader);
 		UUID userId = UUID.fromString(validation.user_id());
 
-		return userRepository.findById(userId)
+		User user = userRepository.findById(userId)
 				.orElseThrow(() -> new InvalidTokenException("Invalid or expired token"));
+
+		if (user.getDeletedAt() != null) {
+			throw new InvalidTokenException("Invalid or expired token");
+		}
+
+		return user;
 	}
 
 	public UserVerificationResponse verifyCredentials(String email, String rawPassword) {
-		Optional<User> userOpt = userRepository.findByEmail(email);
+		Optional<User> userOpt = userRepository.findByEmail(email).filter(user -> user.getDeletedAt() == null);
 
 		// Always run the encoder, even when the user doesn't exist, so response
 		// timing doesn't itself leak whether the account exists.

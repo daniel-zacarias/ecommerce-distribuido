@@ -11,10 +11,13 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import java.util.UUID;
+
 @Component
 public class AuthServiceClientImpl implements AuthServiceClient {
 
 	private static final String VALIDATE_PATH = "/auth/validate";
+	private static final String REVOKE_SESSIONS_PATH = "/internal/auth/users/{userId}/revoke-sessions";
 
 	private final RestClient authServiceRestClient;
 
@@ -32,6 +35,20 @@ public class AuthServiceClientImpl implements AuthServiceClient {
 					.body(TokenValidationResponse.class);
 		} catch (HttpClientErrorException ex) {
 			throw new InvalidTokenException("Invalid or expired token");
+		} catch (HttpServerErrorException | ResourceAccessException ex) {
+			throw new AuthServiceUnavailableException("Auth service did not respond successfully", ex);
+		} catch (RestClientException ex) {
+			throw new AuthServiceUnavailableException("Unexpected error while calling auth service", ex);
+		}
+	}
+
+	@Override
+	public void revokeSessions(UUID userId) {
+		try {
+			authServiceRestClient.post()
+					.uri(REVOKE_SESSIONS_PATH, userId)
+					.retrieve()
+					.toBodilessEntity();
 		} catch (HttpServerErrorException | ResourceAccessException ex) {
 			throw new AuthServiceUnavailableException("Auth service did not respond successfully", ex);
 		} catch (RestClientException ex) {

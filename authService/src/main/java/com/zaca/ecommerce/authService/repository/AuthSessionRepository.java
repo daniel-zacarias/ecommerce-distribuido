@@ -16,6 +16,8 @@ public interface AuthSessionRepository {
 
 	boolean isAccessTokenRevoked(String jti);
 
+	void revokeAllForUser(String userId);
+
 	record RotationOutcome(RotationResult result, String userId, Role role, String sessionId) {
 
 		public static RotationOutcome notFound() {

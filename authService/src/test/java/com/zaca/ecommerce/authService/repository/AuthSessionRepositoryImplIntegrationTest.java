@@ -154,6 +154,28 @@ class AuthSessionRepositoryImplIntegrationTest {
 	}
 
 	@Test
+	void revokeAllForUserRevokesEveryActiveSessionOfThatUser() {
+		String userId = UUID.randomUUID().toString();
+		String tokenA = UUID.randomUUID().toString();
+		String tokenB = UUID.randomUUID().toString();
+		repository.create(tokenA, userId, Role.USER, TTL);
+		String sessionIdB = repository.create(tokenB, userId, Role.USER, TTL);
+		String jtiB = UUID.randomUUID().toString();
+		repository.linkAccessToken(jtiB, sessionIdB, TTL);
+
+		repository.revokeAllForUser(userId);
+
+		AuthSessionRepository.RotationOutcome outcomeA = repository.rotate(tokenA, UUID.randomUUID().toString(), TTL);
+		assertThat(outcomeA.result()).isEqualTo(AuthSessionRepository.RotationResult.REUSE_DETECTED);
+		assertThat(repository.isAccessTokenRevoked(jtiB)).isTrue();
+	}
+
+	@Test
+	void revokeAllForUserIsANoOpWhenUserHasNoSessions() {
+		repository.revokeAllForUser(UUID.randomUUID().toString());
+	}
+
+	@Test
 	void concurrentRotationOfTheSameTokenSucceedsExactlyOnce() throws Exception {
 		String token = UUID.randomUUID().toString();
 		repository.create(token, "user-1", Role.USER, TTL);

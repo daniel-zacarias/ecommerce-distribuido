@@ -15,7 +15,8 @@ public class RestClientConfig {
 	public RestClient authServiceRestClient(
 			@Value("${auth-service.base-url}") String baseUrl,
 			@Value("${auth-service.connect-timeout-ms}") long connectTimeoutMs,
-			@Value("${auth-service.read-timeout-ms}") long readTimeoutMs) {
+			@Value("${auth-service.read-timeout-ms}") long readTimeoutMs,
+			@Value("${internal-api.key}") String internalApiKey) {
 		SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
 		requestFactory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
 		requestFactory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
@@ -23,6 +24,7 @@ public class RestClientConfig {
 		return RestClient.builder()
 				.baseUrl(baseUrl)
 				.requestFactory(requestFactory)
+				.defaultHeader("X-API-KEY", internalApiKey)
 				.build();
 	}
 }

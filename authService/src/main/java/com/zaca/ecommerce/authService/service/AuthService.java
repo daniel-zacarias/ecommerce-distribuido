@@ -90,6 +90,10 @@ public class AuthService {
 		return new TokenValidationResponse(claims.subject(), claims.tokenType(), claims.expiresAt(), claims.role());
 	}
 
+	public void revokeSessionsForUser(String userId) {
+		authSessionRepository.revokeAllForUser(userId);
+	}
+
 	public void logout(String authorizationHeader) {
 		String token = extractBearerToken(authorizationHeader);
 		if (token == null) {

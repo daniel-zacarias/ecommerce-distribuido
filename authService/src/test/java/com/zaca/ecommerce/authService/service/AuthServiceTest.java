@@ -153,6 +153,13 @@ class AuthServiceTest {
 	}
 
 	@Test
+	void revokeSessionsForUserDelegatesToRepository() {
+		authService.revokeSessionsForUser("user-1");
+
+		verify(authSessionRepository).revokeAllForUser("user-1");
+	}
+
+	@Test
 	void logoutRevokesTheSessionForAValidAccessToken() {
 		Instant expiresAt = Instant.now().plusSeconds(1800);
 		when(jwtService.validate("valid-token"))
