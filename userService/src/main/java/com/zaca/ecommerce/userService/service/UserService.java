@@ -7,6 +7,7 @@ import com.zaca.ecommerce.userService.dto.UserVerificationResponse;
 import com.zaca.ecommerce.userService.entity.User;
 import com.zaca.ecommerce.userService.exception.DuplicateEmailException;
 import com.zaca.ecommerce.userService.exception.InvalidTokenException;
+import com.zaca.ecommerce.userService.exception.NoUpdatableFieldsException;
 import com.zaca.ecommerce.userService.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -55,6 +56,36 @@ public class UserService {
 	}
 
 	public UserResponse getCurrentUser(String authorizationHeader) {
+		User user = resolveCurrentUser(authorizationHeader);
+		return new UserResponse(user.getId(), user.getName(), user.getEmail(), user.getCreatedAt());
+	}
+
+	public void updateCurrentUser(String authorizationHeader, String name, String email) {
+		User user = resolveCurrentUser(authorizationHeader);
+
+		boolean hasName = StringUtils.hasText(name);
+		boolean hasEmail = StringUtils.hasText(email);
+
+		if (!hasName && !hasEmail) {
+			throw new NoUpdatableFieldsException("At least one field (name or email) must be provided");
+		}
+
+		if (hasEmail && !email.equalsIgnoreCase(user.getEmail())
+				&& userRepository.existsByEmailAndIdNot(email, user.getId())) {
+			throw new DuplicateEmailException("Email already in use");
+		}
+
+		if (hasName) {
+			user.setName(name);
+		}
+		if (hasEmail) {
+			user.setEmail(email);
+		}
+		user.setUpdatedAt(Instant.now());
+		userRepository.save(user);
+	}
+
+	private User resolveCurrentUser(String authorizationHeader) {
 		if (!StringUtils.hasText(authorizationHeader) || !authorizationHeader.startsWith("Bearer ")) {
 			throw new InvalidTokenException("Authorization header is missing or malformed");
 		}
@@ -62,10 +93,8 @@ public class UserService {
 		TokenValidationResponse validation = authServiceClient.validate(authorizationHeader);
 		UUID userId = UUID.fromString(validation.user_id());
 
-		User user = userRepository.findById(userId)
+		return userRepository.findById(userId)
 				.orElseThrow(() -> new InvalidTokenException("Invalid or expired token"));
-
-		return new UserResponse(user.getId(), user.getName(), user.getEmail(), user.getCreatedAt());
 	}
 
 	public UserVerificationResponse verifyCredentials(String email, String rawPassword) {

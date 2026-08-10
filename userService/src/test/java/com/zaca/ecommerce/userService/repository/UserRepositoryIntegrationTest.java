@@ -51,6 +51,47 @@ class UserRepositoryIntegrationTest {
 	}
 
 	@Test
+	void existsByEmailAndIdNotReturnsTrueWhenEmailBelongsToDifferentUser() {
+		Instant now = Instant.now();
+		User owner = User.builder()
+				.id(UUID.randomUUID())
+				.name("Owner")
+				.email("owner@test.com")
+				.password("hashed-password")
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		User other = User.builder()
+				.id(UUID.randomUUID())
+				.name("Other")
+				.email("other@test.com")
+				.password("hashed-password")
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		userRepository.save(owner);
+		userRepository.save(other);
+
+		assertThat(userRepository.existsByEmailAndIdNot("other@test.com", owner.getId())).isTrue();
+	}
+
+	@Test
+	void existsByEmailAndIdNotReturnsFalseWhenEmailBelongsToSameUser() {
+		Instant now = Instant.now();
+		User owner = User.builder()
+				.id(UUID.randomUUID())
+				.name("Owner")
+				.email("owner@test.com")
+				.password("hashed-password")
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		userRepository.save(owner);
+
+		assertThat(userRepository.existsByEmailAndIdNot("owner@test.com", owner.getId())).isFalse();
+	}
+
+	@Test
 	void findByEmailReturnsUserWhenPresent() {
 		Instant now = Instant.now();
 		User user = User.builder()

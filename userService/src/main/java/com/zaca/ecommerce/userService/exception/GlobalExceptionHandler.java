@@ -35,6 +35,11 @@ public class GlobalExceptionHandler {
 		return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("Invalid or expired token"));
 	}
 
+	@ExceptionHandler(NoUpdatableFieldsException.class)
+	public ResponseEntity<ErrorResponse> handleNoUpdatableFields(NoUpdatableFieldsException ex) {
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(ex.getMessage()));
+	}
+
 	@ExceptionHandler(AuthServiceUnavailableException.class)
 	public ResponseEntity<ErrorResponse> handleAuthServiceUnavailable(AuthServiceUnavailableException ex) {
 		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)

@@ -4,6 +4,7 @@ import com.zaca.ecommerce.userService.dto.UserResponse;
 import com.zaca.ecommerce.userService.dto.UserVerificationResponse;
 import com.zaca.ecommerce.userService.exception.DuplicateEmailException;
 import com.zaca.ecommerce.userService.exception.InvalidTokenException;
+import com.zaca.ecommerce.userService.exception.NoUpdatableFieldsException;
 import com.zaca.ecommerce.userService.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,9 +17,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.Instant;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -103,6 +108,73 @@ class UserControllerTest {
 		mockMvc.perform(get("/me").header("Authorization", "Bearer invalid-token"))
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.message").value("Invalid or expired token"));
+	}
+
+	@Test
+	void returns200WithMessageWhenUpdateSucceeds() throws Exception {
+		doNothing().when(userService).updateCurrentUser(anyString(), any(), any());
+
+		mockMvc.perform(patch("/me")
+						.header("Authorization", "Bearer valid-token")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"name":"New Name","email":"new@test.com"}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.message").value("Updated successful"));
+	}
+
+	@Test
+	void returns400WhenUpdateEmailIsInvalid() throws Exception {
+		mockMvc.perform(patch("/me")
+						.header("Authorization", "Bearer valid-token")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"name":"New Name","email":"not-an-email"}
+								"""))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void returns400WhenUpdateBodyHasNoUpdatableFields() throws Exception {
+		doThrow(new NoUpdatableFieldsException("At least one field (name or email) must be provided"))
+				.when(userService).updateCurrentUser(anyString(), any(), any());
+
+		mockMvc.perform(patch("/me")
+						.header("Authorization", "Bearer valid-token")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{}"))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void returns401WhenUpdateTokenIsInvalidOrMissing() throws Exception {
+		doThrow(new InvalidTokenException("Invalid or expired token"))
+				.when(userService).updateCurrentUser(anyString(), any(), any());
+
+		mockMvc.perform(patch("/me")
+						.header("Authorization", "Bearer invalid-token")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"name":"New Name"}
+								"""))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.message").value("Invalid or expired token"));
+	}
+
+	@Test
+	void returns409WhenUpdateEmailAlreadyUsedByAnotherUser() throws Exception {
+		doThrow(new DuplicateEmailException("Email already in use"))
+				.when(userService).updateCurrentUser(anyString(), any(), any());
+
+		mockMvc.perform(patch("/me")
+						.header("Authorization", "Bearer valid-token")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"taken@test.com"}
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.message").value("Email already in use"));
 	}
 
 	@Test

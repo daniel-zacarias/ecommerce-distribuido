@@ -7,6 +7,7 @@ import com.zaca.ecommerce.userService.dto.UserVerificationResponse;
 import com.zaca.ecommerce.userService.entity.User;
 import com.zaca.ecommerce.userService.exception.DuplicateEmailException;
 import com.zaca.ecommerce.userService.exception.InvalidTokenException;
+import com.zaca.ecommerce.userService.exception.NoUpdatableFieldsException;
 import com.zaca.ecommerce.userService.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -122,6 +123,180 @@ class UserServiceTest {
 		when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> userService.getCurrentUser("Bearer valid-token"))
+				.isInstanceOf(InvalidTokenException.class);
+	}
+
+	@Test
+	void updatesNameAndEmailWhenBothProvided() {
+		UUID userId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer valid-token"))
+				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60)));
+		User user = User.builder()
+				.id(userId)
+				.name("Old Name")
+				.email("old@test.com")
+				.password("hashed-password")
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+		when(userRepository.existsByEmailAndIdNot("new@test.com", userId)).thenReturn(false);
+		when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+		userService.updateCurrentUser("Bearer valid-token", "New Name", "new@test.com");
+
+		ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+		verify(userRepository).save(captor.capture());
+		assertThat(captor.getValue().getName()).isEqualTo("New Name");
+		assertThat(captor.getValue().getEmail()).isEqualTo("new@test.com");
+		assertThat(captor.getValue().getUpdatedAt()).isAfter(now);
+	}
+
+	@Test
+	void updatesOnlyNameWhenEmailNotProvided() {
+		UUID userId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer valid-token"))
+				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60)));
+		User user = User.builder()
+				.id(userId)
+				.name("Old Name")
+				.email("old@test.com")
+				.password("hashed-password")
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+		when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+		userService.updateCurrentUser("Bearer valid-token", "New Name", null);
+
+		ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+		verify(userRepository).save(captor.capture());
+		assertThat(captor.getValue().getName()).isEqualTo("New Name");
+		assertThat(captor.getValue().getEmail()).isEqualTo("old@test.com");
+		verify(userRepository, never()).existsByEmailAndIdNot(anyString(), any(UUID.class));
+	}
+
+	@Test
+	void updatesOnlyEmailWhenNameNotProvided() {
+		UUID userId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer valid-token"))
+				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60)));
+		User user = User.builder()
+				.id(userId)
+				.name("Old Name")
+				.email("old@test.com")
+				.password("hashed-password")
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+		when(userRepository.existsByEmailAndIdNot("new@test.com", userId)).thenReturn(false);
+		when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+		userService.updateCurrentUser("Bearer valid-token", null, "new@test.com");
+
+		ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+		verify(userRepository).save(captor.capture());
+		assertThat(captor.getValue().getName()).isEqualTo("Old Name");
+		assertThat(captor.getValue().getEmail()).isEqualTo("new@test.com");
+	}
+
+	@Test
+	void throwsDuplicateEmailWhenNewEmailUsedByAnotherUser() {
+		UUID userId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer valid-token"))
+				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60)));
+		User user = User.builder()
+				.id(userId)
+				.name("Old Name")
+				.email("old@test.com")
+				.password("hashed-password")
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+		when(userRepository.existsByEmailAndIdNot("taken@test.com", userId)).thenReturn(true);
+
+		assertThatThrownBy(() -> userService.updateCurrentUser("Bearer valid-token", null, "taken@test.com"))
+				.isInstanceOf(DuplicateEmailException.class);
+
+		verify(userRepository, never()).save(any(User.class));
+	}
+
+	@Test
+	void doesNotThrowWhenReSubmittingOwnCurrentEmail() {
+		UUID userId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer valid-token"))
+				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60)));
+		User user = User.builder()
+				.id(userId)
+				.name("Old Name")
+				.email("user@test.com")
+				.password("hashed-password")
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+		when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+		userService.updateCurrentUser("Bearer valid-token", "New Name", "user@test.com");
+
+		verify(userRepository, never()).existsByEmailAndIdNot(anyString(), any(UUID.class));
+		verify(userRepository).save(any(User.class));
+	}
+
+	@Test
+	void throwsNoUpdatableFieldsWhenNameAndEmailAreBlankOrNull() {
+		UUID userId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer valid-token"))
+				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60)));
+		User user = User.builder()
+				.id(userId)
+				.name("Old Name")
+				.email("user@test.com")
+				.password("hashed-password")
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+		when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+		assertThatThrownBy(() -> userService.updateCurrentUser("Bearer valid-token", "", " "))
+				.isInstanceOf(NoUpdatableFieldsException.class);
+
+		verify(userRepository, never()).save(any(User.class));
+	}
+
+	@Test
+	void throwsInvalidTokenWhenUpdateAuthorizationHeaderIsMissing() {
+		assertThatThrownBy(() -> userService.updateCurrentUser(null, "New Name", null))
+				.isInstanceOf(InvalidTokenException.class);
+
+		verifyNoInteractions(authServiceClient);
+	}
+
+	@Test
+	void throwsInvalidTokenWhenUpdateAuthorizationHeaderIsMalformed() {
+		assertThatThrownBy(() -> userService.updateCurrentUser("malformed-token", "New Name", null))
+				.isInstanceOf(InvalidTokenException.class);
+
+		verifyNoInteractions(authServiceClient);
+	}
+
+	@Test
+	void throwsInvalidTokenWhenUpdateUserIsNotFoundAfterValidation() {
+		UUID userId = UUID.randomUUID();
+		when(authServiceClient.validate("Bearer valid-token"))
+				.thenReturn(new TokenValidationResponse(userId.toString(), "access", Instant.now().plusSeconds(60)));
+		when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> userService.updateCurrentUser("Bearer valid-token", "New Name", null))
 				.isInstanceOf(InvalidTokenException.class);
 	}
 

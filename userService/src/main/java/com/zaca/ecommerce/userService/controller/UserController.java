@@ -1,6 +1,8 @@
 package com.zaca.ecommerce.userService.controller;
 
 import com.zaca.ecommerce.userService.dto.CreateUserRequest;
+import com.zaca.ecommerce.userService.dto.MessageResponse;
+import com.zaca.ecommerce.userService.dto.UpdateUserRequest;
 import com.zaca.ecommerce.userService.dto.UserResponse;
 import com.zaca.ecommerce.userService.dto.UserVerificationRequest;
 import com.zaca.ecommerce.userService.dto.UserVerificationResponse;
@@ -9,6 +11,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -34,6 +37,14 @@ public class UserController {
 			@RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
 		UserResponse response = userService.getCurrentUser(authorizationHeader);
 		return ResponseEntity.ok(response);
+	}
+
+	@PatchMapping("/me")
+	public ResponseEntity<MessageResponse> updateMe(
+			@RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+			@Valid @RequestBody UpdateUserRequest request) {
+		userService.updateCurrentUser(authorizationHeader, request.name(), request.email());
+		return ResponseEntity.ok(new MessageResponse("Updated successful"));
 	}
 
 	@PostMapping("/internal/users/verify")
