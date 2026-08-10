@@ -1,4 +1,4 @@
 package com.zaca.ecommerce.authService.dto;
 
-public record UserValidationRequest(String username, String password) {
+public record UserValidationRequest(String email, String password) {
 }

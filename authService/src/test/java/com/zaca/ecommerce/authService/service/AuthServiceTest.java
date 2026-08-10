@@ -49,9 +49,9 @@ class AuthServiceTest {
 	}
 
 	@Test
-	void returnsTokensWhenAccountIsActive() {
+	void returnsTokensWhenCredentialsAreValid() {
 		when(userServiceClient.validateCredentials("user", "123456"))
-				.thenReturn(new UserValidationResponse("user-id-1", "ACTIVE"));
+				.thenReturn(new UserValidationResponse(true, true, "user-id-1"));
 
 		Instant accessExpiresAt = Instant.now().plusSeconds(1800);
 		when(jwtService.generateAccessToken("user-id-1"))
@@ -69,9 +69,9 @@ class AuthServiceTest {
 	}
 
 	@Test
-	void throwsInvalidCredentialsWhenAccountIsNotActive() {
+	void throwsInvalidCredentialsWhenCredentialsAreInvalid() {
 		when(userServiceClient.validateCredentials("user", "123456"))
-				.thenReturn(new UserValidationResponse("user-id-1", "INACTIVE"));
+				.thenReturn(new UserValidationResponse(false, false, null));
 
 		assertThatThrownBy(() -> authService.authenticate("user", "123456"))
 				.isInstanceOf(InvalidCredentialsException.class);

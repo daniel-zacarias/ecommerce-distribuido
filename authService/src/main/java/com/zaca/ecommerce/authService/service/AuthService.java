@@ -35,13 +35,13 @@ public class AuthService {
 	public AuthResponse authenticate(String username, String password) {
 		UserValidationResponse validationResponse = userServiceClient.validateCredentials(username, password);
 
-		if (!validationResponse.isActive()) {
-			throw new InvalidCredentialsException("Account is not active");
+		if (!validationResponse.valid()) {
+			throw new InvalidCredentialsException("Invalid credentials");
 		}
 
-		JwtService.GeneratedToken accessToken = jwtService.generateAccessToken(validationResponse.id());
+		JwtService.GeneratedToken accessToken = jwtService.generateAccessToken(validationResponse.user_id());
 		String refreshToken = UUID.randomUUID().toString();
-		String sessionId = authSessionRepository.create(refreshToken, validationResponse.id(), refreshTokenTtl());
+		String sessionId = authSessionRepository.create(refreshToken, validationResponse.user_id(), refreshTokenTtl());
 		authSessionRepository.linkAccessToken(accessToken.jti(), sessionId, accessTokenTtl());
 
 		return new AuthResponse(accessToken.token(), refreshToken, accessToken.expiresAt());
