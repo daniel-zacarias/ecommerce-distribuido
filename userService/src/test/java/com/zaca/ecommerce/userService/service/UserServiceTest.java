@@ -8,6 +8,7 @@ import com.zaca.ecommerce.userService.entity.Role;
 import com.zaca.ecommerce.userService.entity.User;
 import com.zaca.ecommerce.userService.exception.DuplicateEmailException;
 import com.zaca.ecommerce.userService.exception.ForbiddenException;
+import com.zaca.ecommerce.userService.exception.InvalidPasswordException;
 import com.zaca.ecommerce.userService.exception.InvalidTokenException;
 import com.zaca.ecommerce.userService.exception.NoUpdatableFieldsException;
 import com.zaca.ecommerce.userService.exception.SelfDeletionNotAllowedException;
@@ -743,5 +744,54 @@ class UserServiceTest {
 		ArgumentCaptor<String> hashCaptor = ArgumentCaptor.forClass(String.class);
 		verify(passwordEncoder).matches(anyString(), hashCaptor.capture());
 		assertThat(hashCaptor.getValue()).isNotNull();
+	}
+
+	@Test
+	void updatesPasswordWhenCurrentPasswordMatches() {
+		UUID userId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer valid-token"))
+				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60), Role.USER));
+		User user = User.builder()
+				.id(userId)
+				.name("User")
+				.email("user@email.com.br")
+				.password("hashed-current-password")
+				.role(Role.USER)
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+
+		when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+		when(passwordEncoder.matches(anyString(), anyString())).thenReturn(true);
+		when(passwordEncoder.encode("new-password")).thenReturn("hashed-new-password");
+		userService.updateCurrentUserPassword("Bearer valid-token", "current-password", "new-password");
+
+		ArgumentCaptor<String> hashCaptor = ArgumentCaptor.forClass(String.class);
+		verify(passwordEncoder).matches(anyString(), hashCaptor.capture());
+		assertThat(hashCaptor.getValue()).isNotNull();
+	}
+
+	@Test
+	void throwsInvalidPasswordWhenCurrentPasswordDoesNotMatch() {
+		UUID userId = UUID.randomUUID();
+		Instant now = Instant.now();
+		when(authServiceClient.validate("Bearer valid-token"))
+				.thenReturn(new TokenValidationResponse(userId.toString(), "access", now.plusSeconds(60), Role.USER));
+		User user = User.builder()
+				.id(userId)
+				.name("User")
+				.email("user@email.com.br")
+				.password("hashed-current-password")
+				.role(Role.USER)
+				.createdAt(now)
+				.updatedAt(now)
+				.build();
+
+		when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+		when(passwordEncoder.matches(anyString(), anyString())).thenReturn(false);
+
+		assertThatThrownBy(() -> userService.updateCurrentUserPassword("Bearer valid-token", "current-password", "new-password"))
+				.isInstanceOf(InvalidPasswordException.class);
 	}
 }

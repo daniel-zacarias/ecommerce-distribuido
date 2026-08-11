@@ -2,6 +2,7 @@ package com.zaca.ecommerce.userService.controller;
 
 import com.zaca.ecommerce.userService.dto.CreateUserRequest;
 import com.zaca.ecommerce.userService.dto.MessageResponse;
+import com.zaca.ecommerce.userService.dto.UpdateUserPasswordRequest;
 import com.zaca.ecommerce.userService.dto.UpdateUserRequest;
 import com.zaca.ecommerce.userService.dto.UserResponse;
 import com.zaca.ecommerce.userService.dto.UserVerificationRequest;
@@ -45,6 +46,14 @@ public class UserController {
 			@Valid @RequestBody UpdateUserRequest request) {
 		userService.updateCurrentUser(authorizationHeader, request.name(), request.email());
 		return ResponseEntity.ok(new MessageResponse("Updated successful"));
+	}
+
+	@PatchMapping("/me/password")
+	public ResponseEntity<MessageResponse> updatePassword(
+			@RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+			@Valid @RequestBody UpdateUserPasswordRequest request) {
+		userService.updateCurrentUserPassword(authorizationHeader, request.password(), request.newPassword());
+		return ResponseEntity.ok(new MessageResponse("Password updated successful"));
 	}
 
 	@PostMapping("/internal/users/verify")

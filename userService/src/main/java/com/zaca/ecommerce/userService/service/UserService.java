@@ -8,6 +8,7 @@ import com.zaca.ecommerce.userService.entity.Role;
 import com.zaca.ecommerce.userService.entity.User;
 import com.zaca.ecommerce.userService.exception.DuplicateEmailException;
 import com.zaca.ecommerce.userService.exception.ForbiddenException;
+import com.zaca.ecommerce.userService.exception.InvalidPasswordException;
 import com.zaca.ecommerce.userService.exception.InvalidTokenException;
 import com.zaca.ecommerce.userService.exception.NoUpdatableFieldsException;
 import com.zaca.ecommerce.userService.exception.SelfDeletionNotAllowedException;
@@ -168,5 +169,17 @@ public class UserService {
 		UUID userId = isValid ? userOpt.get().getId() : null;
 		Role role = isValid ? userOpt.get().getRole() : null;
 		return new UserVerificationResponse(isValid, isValid, userId, role);
+	}
+
+	public void updateCurrentUserPassword(String authorizationHeader, String password, String newPassword) {
+		User user = resolveCurrentUser(authorizationHeader);
+
+		if (!passwordEncoder.matches(password, user.getPassword())) {
+			throw new InvalidPasswordException("Current password is incorrect");
+		}
+
+		user.setPassword(passwordEncoder.encode(newPassword));
+		user.setUpdatedAt(Instant.now());
+		userRepository.save(user);
 	}
 }

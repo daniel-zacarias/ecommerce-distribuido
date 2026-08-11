@@ -4,6 +4,7 @@ import com.zaca.ecommerce.userService.dto.UserResponse;
 import com.zaca.ecommerce.userService.dto.UserVerificationResponse;
 import com.zaca.ecommerce.userService.entity.Role;
 import com.zaca.ecommerce.userService.exception.DuplicateEmailException;
+import com.zaca.ecommerce.userService.exception.InvalidPasswordException;
 import com.zaca.ecommerce.userService.exception.InvalidTokenException;
 import com.zaca.ecommerce.userService.exception.NoUpdatableFieldsException;
 import com.zaca.ecommerce.userService.service.UserService;
@@ -22,6 +23,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -229,5 +231,57 @@ class UserControllerTest {
 								{"email":"user@test.com","password":""}
 								"""))
 				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void returns400WhenCurrentPasswordDoesNotMatch() throws Exception {
+		doThrow(new InvalidPasswordException("Current password is incorrect"))
+				.when(userService).updateCurrentUserPassword(anyString(), any(), any());
+		mockMvc.perform(patch("/me/password")
+						.header("Authorization", "Bearer valid-token")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"password":"wrong-password","newPassword":"newPassword123"}
+								"""))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void returns200WhenPasswordUpdateSucceeds() throws Exception {
+		doNothing().when(userService)
+				.updateCurrentUserPassword(anyString(), any(), any());
+		mockMvc.perform(patch("/me/password")
+						.header("Authorization", "Bearer valid-token")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"password":"current-password","newPassword":"newPassword123"}
+								"""))
+				.andExpect(status().isOk());
+	}
+
+	@Test
+	void returns400WhenCurrentPasswordFieldIsBlank() throws Exception {
+		mockMvc.perform(patch("/me/password")
+						.header("Authorization", "Bearer valid-token")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"password":"","newPassword":"newPassword123"}
+								"""))
+				.andExpect(status().isBadRequest());
+
+		verifyNoInteractions(userService);
+	}
+
+	@Test
+	void returns400WhenNewPasswordIsWeak() throws Exception {
+		mockMvc.perform(patch("/me/password")
+						.header("Authorization", "Bearer valid-token")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"password":"current-password","newPassword":"abc"}
+								"""))
+				.andExpect(status().isBadRequest());
+
+		verifyNoInteractions(userService);
 	}
 }
